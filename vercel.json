@@ -3,6 +3,14 @@
   "framework": "nextjs",
   "buildCommand": "bash scripts/vercel-build.sh",
   "installCommand": "bun install",
-  "regions": ["fra1"],
-  "notes": "Zero-config demo: DATABASE_URL defaults to the bundled SQLite DB (cloned to /tmp per lambda instance — writes reset when the instance recycles). For production: set HAZINA_INTENT_SECRET (HMAC intent signing) and a Postgres DATABASE_URL in project env vars. fra1 = EU region closest to Kenya with Vercel coverage."
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
+    }
+  ]
 }

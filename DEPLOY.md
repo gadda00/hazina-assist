@@ -28,13 +28,20 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
   route file would become its own lambda with its own `/tmp`, which would fork
   the demo SQLite DB across functions and silently break the cross-route HITL
   flow (chat stages a transfer → ops approves it). One function = one shared
-  `/tmp` copy = the flow holds.
+  `/tmp` copy = the flow holds. The function runs with a 30 s `maxDuration`
+  (cold-start + model-deadline headroom).
 - **The DB** — the seeded `db/custom.db` is traced into the bundle
   (`outputFileTracingIncludes`, incl. the Prisma query engine), and cloned to
   `/tmp/hazina-demo.db` at cold start (`src/lib/db.ts`) because the lambda
   filesystem is read-only. The bundle copy stays pristine (verified by the
   simulation suite below).
-- **Region** — `fra1` (closest Vercel region to Kenya).
+- **Security headers** — `vercel.json` sets `X-Content-Type-Options`,
+  `Referrer-Policy` and `Permissions-Policy` on every response. No
+  `X-Frame-Options` on purpose: the live app may be embedded from the GitHub
+  Pages showcase.
+- **Region** — set per-project in the Vercel dashboard (Settings → Functions →
+  Region) if you want `fra1`, the closest region to Kenya. The `regions` key in
+  `vercel.json` is plan-gated (Pro+), so it is not committed.
 
 ### What to expect after deploying
 
@@ -56,7 +63,21 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
 | `MODEL_TIMEOUT_MS` | Deadline for external model calls before fallback (default `6000`). |
 | `DATABASE_URL` | **Leave unset for the demo.** Set a Postgres URL for a persistent, production-shaped deployment — non-file URLs pass through untouched (`src/lib/db.ts`). |
 
+### Troubleshooting
+
+| Symptom | Cause → fix |
+|---|---|
+| `Invalid request: should NOT have additional property \`notes\`. Please remove it.` (or any other property name) at deploy time | `vercel.json` contained a key outside Vercel's strict config schema — Vercel validates it before the build starts. Only schema-defined keys are allowed (commentary belongs in this file, not the JSON). This bit us once with a `notes` field; fixed and regression-checked against the published schema. |
+| Deploy fails with a plan/region error | A `regions` entry in `vercel.json` needs Pro+. Region is a dashboard setting instead — see above. |
+| The URL isn't `hazina-assist.vercel.app` | Vercel appended a suffix (project name taken) or you renamed the project. Update the `#liveapp` href in `docs/index.html` and the links in `README.md`. |
+| Answers feel canned / model says `deterministic-fallback` | Expected with no model credentials on Vercel — the designed degradation path (ADR-001), asserted by the CI eval gate. |
+| Demo data resets | The `/tmp` DB lives per serverless instance — documented demo posture; set a Postgres `DATABASE_URL` for persistence. |
+
 ### Verified before every push
+
+`python3 scripts/check-vercel-config.py` validates `vercel.json` against
+Vercel's published schema (also a CI job) — the same validation that gates the
+deploy, run before you can push a config typo.
 
 `bash scripts/run-vercel-sim.sh` runs the standalone production build in
 Vercel posture (`VERCEL=1`, fresh `/tmp`, read-only bundle) and asserts 15

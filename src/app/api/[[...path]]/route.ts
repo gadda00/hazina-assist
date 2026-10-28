@@ -36,6 +36,11 @@ import * as evalRun from "@/server/api/eval";
 
 type Handler = (req: Request) => Promise<Response>;
 
+// Vercel: headroom for a cold instance (Prisma engine spin-up, /tmp DB clone)
+// plus the 6 s external-model deadline before the deterministic fallback
+// composes the answer. 30 s sits inside every plan's function limit.
+export const maxDuration = 30;
+
 const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
   "auth/login": { GET: auth.GET, POST: auth.POST },
   chat: { GET: chat.GET, POST: chat.POST },

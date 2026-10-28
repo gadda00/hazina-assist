@@ -75,6 +75,22 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pytest -q
 
+  # ------------------------------------------------------- deploy config preflight
+  # Vercel validates vercel.json against a strict schema BEFORE building; an
+  # unknown key (e.g. a stray "notes") fails the deploy with
+  # "Invalid request: should NOT have additional property ..." — catching it
+  # here turns a deploy round-trip into a red check.
+  vercel-config:
+    name: vercel.json schema preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema
+      - run: python3 scripts/check-vercel-config.py
+
   # -------------------------------------------------------------------- security
   secret-scan:
     name: gitleaks (secrets)
