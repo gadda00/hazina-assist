@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hazina Assist — Bank-Grade AI Assistant</title>
+<meta name="description" content="A bank-grade AI assistant for a Kenyan bank: policy Q&A with citations, account tools, signed transfer intents with human approval, and a hash-chained audit log.">
+<style>
+  :root{
+    --bg:#0a0f0d; --panel:#101815; --panel2:#0d1512; --line:#1e2b26;
+    --em:#10b981; --em2:#34d399; --emdim:#064e3b;
+    --t1:#e8f0ec; --t2:#9fb4ab; --t3:#6b8077;
+    --red:#f87171; --amber:#fbbf24; --violet:#a78bfa;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--t2);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;overflow-x:hidden}
+  a{color:var(--em2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  /* header */
+  header{position:sticky;top:0;z-index:50;background:rgba(10,15,13,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{display:flex;align-items:center;gap:10px;color:var(--t1);font-weight:700;font-size:15px;letter-spacing:.3px}
+  .mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--em),#0d9488);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:800}
+  .navlinks{display:flex;gap:22px;font-size:13px}
+  .navlinks a{color:var(--t2)}
+  .navlinks a:hover{color:var(--em2)}
+  .ghbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);color:var(--t1);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600}
+  .ghbtn:hover{border-color:var(--em);text-decoration:none;color:var(--em2)}
+  /* hero */
+  .hero{padding:88px 0 64px;position:relative;text-align:center}
+  .hero:before{content:"";position:absolute;inset:-40% 20% auto;height:420px;background:radial-gradient(closest-side,rgba(16,185,129,.14),transparent);filter:blur(40px);pointer-events:none}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--emdim);background:rgba(16,185,129,.07);color:var(--em2);font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;letter-spacing:.4px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--em);animation:blink 2.4s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  h1{color:var(--t1);font-size:clamp(34px,5.4vw,56px);line-height:1.12;font-weight:800;letter-spacing:-.02em;margin:22px 0 16px}
+  h1 .grad{background:linear-gradient(90deg,var(--em2),#2dd4bf);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{max-width:720px;margin:0 auto;font-size:17px;color:var(--t2)}
+  .sub b{color:var(--t1)}
+  .ctas{display:flex;gap:14px;justify-content:center;margin-top:30px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:700;font-size:14px;border:1px solid transparent}
+  .btn-p{background:var(--em);color:#04120c}
+  .btn-p:hover{background:var(--em2);text-decoration:none}
+  .btn-s{border-color:var(--line);color:var(--t1);background:var(--panel)}
+  .btn-s:hover{border-color:var(--em);text-decoration:none;color:var(--em2)}
+  .hero-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+  .hb{font-family:var(--mono);font-size:11.5px;color:var(--t3);border:1px solid var(--line);border-radius:6px;padding:5px 10px;background:var(--panel2)}
+  .hb b{color:var(--em2);font-weight:600}
+  /* sections */
+  section{padding:64px 0;border-top:1px solid var(--line)}
+  .kicker{font-family:var(--mono);font-size:12px;color:var(--em);letter-spacing:2px;text-transform:uppercase;font-weight:600}
+  h2{color:var(--t1);font-size:clamp(24px,3.4vw,34px);font-weight:750;letter-spacing:-.01em;margin:10px 0 14px}
+  .lede{max-width:760px;font-size:15.5px;margin-bottom:34px}
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .stat .n{font-size:34px;font-weight:800;color:var(--em2);font-family:var(--mono);letter-spacing:-.02em}
+  .stat .l{font-size:13px;color:var(--t2);margin-top:4px}
+  .stat .src{font-size:11px;color:var(--t3);margin-top:8px;font-family:var(--mono)}
+  /* capability cards */
+  .caps{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .cap{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  .cap img{width:100%;aspect-ratio:1280/577;object-fit:cover;object-position:top;border-bottom:1px solid var(--line)}
+  .cap .body{padding:20px}
+  .cap h3{color:var(--t1);font-size:16px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .num{font-family:var(--mono);font-size:11px;color:var(--em);border:1px solid var(--emdim);border-radius:5px;padding:2px 7px;background:rgba(16,185,129,.06)}
+  .cap p{font-size:13.5px}
+  .cap .tech{margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--t3);line-height:1.9}
+  .cap .tech em{color:var(--em2);font-style:normal}
+  /* pipeline */
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:26px 0 10px}
+  .node{font-family:var(--mono);font-size:12px;font-weight:600;padding:8px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--t1);white-space:nowrap}
+  .node.g{border-color:var(--emdim);color:var(--em2);background:rgba(16,185,129,.07)}
+  .node.h{border-color:#7c3aed55;color:var(--violet);background:rgba(167,139,250,.07)}
+  .arrow{color:var(--t3);font-family:var(--mono);font-size:12px}
+  .subnodes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+  .cap2{font-family:var(--mono);font-size:11px;color:var(--t3);border:1px dashed var(--line);border-radius:7px;padding:6px 11px}
+  .arch-note{max-width:760px;margin:24px auto 0;text-align:center;font-size:13px;color:var(--t2)}
+  .arch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:26px}
+  .arch-cell{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:16px}
+  .arch-cell b{color:var(--t1);font-size:13px;display:block;margin-bottom:5px}
+  .arch-cell span{font-size:12px;color:var(--t3);font-family:var(--mono);line-height:1.7}
+  /* money chain */
+  .chain{counter-reset:step;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:8px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px;counter-increment:step;position:relative}
+  .step:before{content:counter(step,decimal-leading-zero);font-family:var(--mono);font-size:11px;color:var(--em);display:block;margin-bottom:8px;letter-spacing:1px}
+  .step b{color:var(--t1);font-size:13.5px;display:block;margin-bottom:5px}
+  .step span{font-size:12px}
+  .step.hot{border-color:#7c3aed55;background:linear-gradient(180deg,rgba(167,139,250,.06),var(--panel))}
+  .chain-note{margin-top:22px;padding:16px 20px;border-left:3px solid var(--em);background:var(--panel2);border-radius:0 10px 10px 0;font-size:14px;color:var(--t1)}
+  .chain-note i{color:var(--em2);font-style:normal;font-weight:700}
+  /* guardrails table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--t1);font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:700;font-family:var(--mono)}
+  td:first-child{color:var(--em2);font-weight:600;white-space:nowrap;font-family:var(--mono);font-size:12px}
+  td{color:var(--t2)}
+  .tblwrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+  /* eval */
+  .evals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+  .ev{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px;text-align:center}
+  .ev .n{font-size:26px;font-weight:800;color:var(--em2);font-family:var(--mono)}
+  .ev .l{font-size:11px;color:var(--t3);margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
+  .langrow{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .lang{flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+  .lang b{color:var(--t1)}
+  .lang .ok{font-family:var(--mono);color:var(--em2);font-size:12px}
+  /* repo grid */
+  .repo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .rg{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:18px}
+  .rg b{color:var(--t1);font-size:13.5px;font-family:var(--mono);display:block;margin-bottom:6px}
+  .rg span{font-size:12.5px}
+  footer{border-top:1px solid var(--line);padding:40px 0 56px;text-align:center;font-size:12.5px;color:var(--t3)}
+  footer .fbrand{color:var(--t2);font-weight:700;margin-bottom:8px}
+  @media(max-width:640px){
+    .navlinks{display:none}
+    .pipe .node{font-size:10.5px;padding:6px 9px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="brand"><div class="mark">H</div>HAZINA&nbsp;ASSIST</div>
+    <nav class="navlinks">
+      <a href="#capabilities">Capabilities</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#guarantee">Money safety</a>
+      <a href="#evals">Evaluations</a>
+      <a href="#repo">Repository</a>
+    </nav>
+    <a class="ghbtn" href="https://github.com/" id="ghlink" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <span id="ghlabel">Source</span>
+    </a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <div class="pill"><span class="dot"></span>EVAL CI GATE PASSING · 55/55 GOLDEN-SET CASES</div>
+    <h1>A bank-grade AI assistant,<br>built for <span class="grad">Kenyan banking</span> rules.</h1>
+    <p class="sub">Policy and tariff Q&A with <b>citations</b>. Account tools with opaque handles. Transfers the model can <b>propose but never execute</b> — signed intents, OTP, and a human officer in the loop. Every decision lands on a <b>hash-chained audit log</b>.</p>
+    <div class="ctas">
+      <a class="btn btn-p" href="#capabilities">Explore the build</a>
+      <a class="btn btn-s" href="#guarantee">How money stays safe</a>
+    </div>
+    <div class="hero-badges">
+      <span class="hb">tests <b>46/46</b></span>
+      <span class="hb">eval gate <b>100%</b></span>
+      <span class="hb">route accuracy <b>100%</b></span>
+      <span class="hb">refusal recall <b>1.00</b></span>
+      <span class="hb">fee numeric match <b>100%</b></span>
+      <span class="hb">audit chain <b>verified</b></span>
+      <span class="hb">EN · SW · <b>Sheng</b></span>
+    </div>
+  </div>
+</div>
+
+<section id="context">
+  <div class="wrap">
+    <div class="kicker">Why this build</div>
+    <h2>The gap it closes</h2>
+    <p class="lede">Kenyan financial institutions are adopting AI faster than they are governing it. Hazina Assist is engineered as a demonstration of what "governed AI" looks like in practice — every JD responsibility (integration, guardrails, monitoring, model risk) mapped to a working control.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">50%</div><div class="l">of surveyed Kenyan institutions have already adopted AI</div><div class="src">CBK industry survey, 2025</div></div>
+      <div class="stat"><div class="n">59%</div><div class="l">have no AI policy in place to govern that adoption</div><div class="src">CBK industry survey, 2025</div></div>
+      <div class="stat"><div class="n">s.35</div><div class="l">Data Protection Act 2019: an AI system should recommend, a human decides</div><div class="src">Kenya DPA 2019</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">LLM calls that ever perform fee arithmetic or move money</div><div class="src">by design — deterministic tools only</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="capabilities">
+  <div class="wrap">
+    <div class="kicker">Capabilities</div>
+    <h2>Four capabilities, one governed pipeline</h2>
+    <p class="lede">Not a chatbot with a system prompt — an explicit state machine where the model proposes, deterministic tools compute, and humans decide anything that matters.</p>
+    <div class="caps">
+      <div class="cap">
+        <img src="screenshots/fee-answer.png" alt="Chat answering a Sheng fee query with a citation to the tariff guide">
+        <div class="body">
+          <h3><span class="num">01</span>Policy &amp; tariff Q&A</h3>
+          <p>Answers in English, Kiswahili and code-mixed Sheng with document citations (doc id, page, effective date). Fees come from a structured tariff table via a deterministic tool — the LLM never does money math.</p>
+          <div class="tech">hybrid retrieval <em>BM25 + dense → RRF</em> · reranker · answerability gate → handoff, never guess</div>
+        </div>
+      </div>
+      <div class="cap">
+        <img src="screenshots/console-approvals.png" alt="Operations console showing the human approval queue">
+        <div class="body">
+          <h3><span class="num">02</span>Account assistant</h3>
+          <p>Balance and mini-statement through typed tool calls with opaque handles — identity never travels in tool arguments. Ownership is resolved server-side; scopes gate every call.</p>
+          <div class="tech">zod-typed tools · <em>acct_7f3a</em> handles · scope enforcement · PII pseudonymised before external calls</div>
+        </div>
+      </div>
+      <div class="cap">
+        <img src="screenshots/console-loanpack.png" alt="Loan pack review with extracted payslip figures">
+        <div class="body">
+          <h3><span class="num">03</span>Loan pre-qualification packs</h3>
+          <p>Payslip documents are extracted with per-field confidence and evidence, validated against Kenyan rules (KRA PIN format, net ≤ gross, one-third deduction rule), and packaged as a recommendation — a credit officer decides.</p>
+          <div class="tech">schema-constrained extraction · field-level confidence · <em>DPA s.35: recommend, never decide</em></div>
+        </div>
+      </div>
+      <div class="cap">
+        <img src="screenshots/console-audit.png" alt="Hash-chained audit log with chain verification">
+        <div class="body">
+          <h3><span class="num">04</span>Operations console</h3>
+          <p>Approval queue, loan-pack review, tamper-evident audit viewer with live chain verification, evaluation dashboards, and Prometheus-format monitoring — all sourced from real runtime data.</p>
+          <div class="tech">HITL queue · audit chain <em>SHA-256 prev_hash→hash</em> · /api/metrics · SLO alerts</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="kicker">Architecture</div>
+    <h2>An explicit graph, not a prompt</h2>
+    <p class="lede">Every message walks the same auditable state machine. Each node emits a trace event that lands on the hash-chained audit log — the same events the "Why this answer" panel shows the customer.</p>
+    <div class="pipe">
+      <span class="node g">guard_in</span><span class="arrow">→</span>
+      <span class="node">route</span><span class="arrow">→</span>
+      <span class="node">policy_check</span><span class="arrow">→</span>
+      <span class="node h">HITL</span><span class="arrow">→</span>
+      <span class="node">execute</span><span class="arrow">→</span>
+      <span class="node g">guard_out</span><span class="arrow">→</span>
+      <span class="node">respond</span>
+    </div>
+    <div class="subnodes">
+      <span class="cap2">rag</span><span class="cap2">account_tools</span><span class="cap2">transfer_flow</span><span class="cap2">idp_flow</span><span class="cap2">deterministic refusal</span>
+    </div>
+    <div class="arch-grid">
+      <div class="arch-cell"><b>Model gateway</b><span>PII pseudonymised before any external call · circuit breaker (3 fails/60s) · deterministic fallback · cost + latency telemetry</span></div>
+      <div class="arch-cell"><b>Tool layer</b><span>zod-typed tools · opaque account handles resolved server-side · read-only by default · scopes enforced</span></div>
+      <div class="arch-cell"><b>Retrieval</b><span>BM25 + dense proxy fused with RRF · lexical reranker · answerability gate at 0.42 · cited answers only</span></div>
+      <div class="arch-cell"><b>Audit &amp; telemetry</b><span>SHA-256 hash chain, PII-redacted payloads · Prometheus metrics · 7 ADRs documenting every trade-off</span></div>
+      <div class="arch-cell"><b>DS service</b><span>Python FastAPI transaction categoriser (TF-IDF + LogReg, 14 labels) behind an OpenAPI contract · keyword fallback if down</span></div>
+      <div class="arch-cell"><b>Mock core banking</b><span>Co-opConnect-shaped API · message-reference idempotency · async status · M-Pesa send</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="guarantee">
+  <div class="wrap">
+    <div class="kicker">The money-movement guarantee</div>
+    <h2>Six steps between "propose" and "move"</h2>
+    <p class="lede">The walkthrough a risk officer asks for: how does a chat message become a debit? Answer — slowly, signed, and with a human in the middle.</p>
+    <div class="chain">
+      <div class="step"><b>Model proposes</b><span>Rules-first extraction stages the intent — the LLM never signs or executes anything.</span></div>
+      <div class="step"><b>Policy gate</b><span>Per-transaction cap, daily cap, new-beneficiary cooling-off — deterministic, testable rules.</span></div>
+      <div class="step"><b>OTP step-up</b><span>6-digit challenge held server-side, outside any LLM context, TTL 5 minutes.</span></div>
+      <div class="step"><b>Signed intent</b><span>HMAC-SHA256 over the body with nonce + expiry — tamper-evident, replay-proof.</span></div>
+      <div class="step hot"><b>Human approval</b><span>A bank officer reviews risk-scored intent in the ops console. This is the DPA s.35 decision point.</span></div>
+      <div class="step"><b>Verified execution</b><span>Signature, TTL and single-use nonce re-verified, then the core API is called with an idempotency key.</span></div>
+    </div>
+    <div class="chain-note"><i>The model proposes. The policy gate gates. A human decides. The executor verifies.</i> — Fee figures, interest and totals are always computed by deterministic tools; the LLM quotes, it never calculates.</div>
+  </div>
+</section>
+
+<section id="guardrails">
+  <div class="wrap">
+    <div class="kicker">Defence in depth</div>
+    <h2>Guardrails at every layer</h2>
+    <div class="tblwrap">
+      <table>
+        <tr><th>Layer</th><th>Controls</th></tr>
+        <tr><td>input</td><td>Kenya-flavoured PII detection (ID, KRA PIN, +254 phones) · EN/SW/mixed injection heuristics · language detection</td></tr>
+        <tr><td>context</td><td>Retrieved chunks and uploaded documents are wrapped as untrusted_source blocks — never promoted to system role</td></tr>
+        <tr><td>tools</td><td>Server-side identity resolution · read-only by default · signed intents for any write · scope enforcement</td></tr>
+        <tr><td>output</td><td>Groundedness scoring against retrieved sources · PII leak filter · regulated-advice filter</td></tr>
+        <tr><td>fallback</td><td>Circuit breaker → deterministic composer → human handoff; refusal recall gated at 100% in CI</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="evals">
+  <div class="wrap">
+    <div class="kicker">Evaluations</div>
+    <h2>The gate that blocks bad merges</h2>
+    <p class="lede">A 55-case golden set (intent × language × risk) runs the production orchestrator end-to-end on every PR. Safety regressions fail the build — refusal recall must stay at 100% because a missed jailbreak is an incident, not a quality dip.</p>
+    <div class="evals">
+      <div class="ev"><div class="n">55/55</div><div class="l">pass rate</div></div>
+      <div class="ev"><div class="n">100%</div><div class="l">route accuracy</div></div>
+      <div class="ev"><div class="n">1.00</div><div class="l">refusal recall</div></div>
+      <div class="ev"><div class="n">100%</div><div class="l">fee numeric match</div></div>
+      <div class="ev"><div class="n">6ms</div><div class="l">latency P50</div></div>
+    </div>
+    <div class="langrow">
+      <div class="lang"><b>English</b><span class="ok">31/31 ✓</span></div>
+      <div class="lang"><b>Kiswahili</b><span class="ok">14/14 ✓</span></div>
+      <div class="lang"><b>Sheng (code-mixed)</b><span class="ok">10/10 ✓</span></div>
+      <div class="lang"><b>Injection probes</b><span class="ok">9/9 refused ✓</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="repo">
+  <div class="wrap">
+    <div class="kicker">Under the hood</div>
+    <h2>What's in the repository</h2>
+    <div class="repo-grid">
+      <div class="rg"><b>packages/hazina-kit</b><span>Reusable, framework-free guardrail primitives: intent signing, PII, injection heuristics, hash chain, eval metrics, BM25/RRF retrieval.</span></div>
+      <div class="rg"><b>services/categoriser</b><span>Standalone Python data-science service with model card and OpenAPI contract — the build/integration boundary is enforced by contract tests on both sides.</span></div>
+      <div class="rg"><b>docs/adr</b><span>Seven architecture decision records — gateway fallback, LLM-never-does-money-math, signed intents, audit hash chain, explicit graph orchestration.</span></div>
+      <div class="rg"><b>docs/governance</b><span>Threat model, CBK mapping, DPIA template, runbook, AI use-case cards.</span></div>
+      <div class="rg"><b>.github/workflows</b><span>CI: lint + typecheck, unit tests, the eval gate, Python pytest, gitleaks, semgrep + bandit, dependency audit + Trivy + SBOM, build.</span></div>
+      <div class="rg"><b>deploy/</b><span>Docker Compose stack (app + categoriser + Prometheus + Grafana) and a Helm chart for Kubernetes.</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fbrand">HAZINA ASSIST</div>
+    <p>A capability demonstration. All customers, accounts, tariffs and payslips are <b style="color:var(--t2)">100% synthetic data</b> — no real customer information is used or stored.</p>
+    <p style="margin-top:8px">Next.js 16 · TypeScript · Prisma · <span style="font-family:var(--mono)">@hazina/kit</span> · FastAPI · <a href="https://github.com/" id="ghfooter">Source on GitHub</a></p>
+  </div>
+</footer>
+
+<script>
+/* Repo links are relative to this page when it is served from the repo's
+   GitHub Pages site: https://<user>.github.io/<repo>/  */
+(function(){
+  var user = new URLSearchParams(location.search).get("user");
+  var repo = new URLSearchParams(location.search).get("repo") || "hazina-assist";
+  var guess = user ? "https://github.com/" + user + "/" + repo : null;
+  if (guess) {
+    document.getElementById("ghlink").href = guess;
+    document.getElementById("ghlabel").textContent = "Repository";
+    document.getElementById("ghfooter").href = guess;
+  }
+})();
+</script>
+</body>
+</html>
