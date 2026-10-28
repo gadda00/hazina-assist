@@ -2,6 +2,8 @@
 
 **A bank-grade AI assistant that maps to every duty in the job ad — controls, integration and operation, not a tutorial chatbot.**
 
+**Try it live: the deployed app is the real implementation — [`hazina-assist.vercel.app`](https://hazina-assist.vercel.app)** (chat in English/Swahili/Sheng, stage a transfer through OTP, approve it in the ops console, watch the audit chain verify). Static showcase: [`gadda00.github.io/hazina-assist`](https://gadda00.github.io/hazina-assist/) · Source: [`github.com/gadda00/hazina-assist`](https://github.com/gadda00/hazina-assist). Deploy your own instance with one click — see [`DEPLOY.md`](DEPLOY.md).
+
 One end-to-end system with four customer-facing capabilities, an operations console, guardrails at every layer, a hash-chained audit trail, human-in-the-loop for every consequential action, and an evaluation gate that fails the PR when quality regresses. Alongside the code sits a governance pack mapped to CBK's draft risk-management instruments and the Data Protection Act 2019.
 
 > **Demo data is 100% synthetic.** Customers, accounts, tariff rows and payslips are generated for the demo. Nothing here touches a real bank.
@@ -157,7 +159,8 @@ Screenshots of every step live in `docs/screenshots/`.
 
 ## Deployment
 
-- **Local / serverless demo:** runs on SQLite (zero-config). Deploy the Next.js app anywhere (Vercel-ready: `vercel.json` included).
+- **Live app (Vercel):** one-click — `vercel.com/new/clone?repository-url=https://github.com/gadda00/hazina-assist` — zero config, zero env vars. The whole API ships as a **single serverless function** (`src/app/api/[[...path]]/route.ts` → `src/server/api/*.ts`) so the demo SQLite DB stays one shared `/tmp` copy instead of forking per-route lambdas. The Vercel posture is regression-tested locally by `scripts/run-vercel-sim.sh` (15 checks incl. the full HITL transfer flow). Full guide: **[`DEPLOY.md`](DEPLOY.md)**.
+- **Local:** runs on SQLite (zero-config) — see Quickstart.
 - **Production posture:** docker-compose (`deploy/docker-compose.yml`) with Postgres, the categoriser service, Prometheus scraping `/api/metrics` and Grafana; Helm chart for k8s (`deploy/helm/`). Set `HAZINA_INTENT_SECRET` and `DATABASE_URL` in the environment — never in code.
 
 ### Ship it: GitHub, Pages and Vercel in three steps
@@ -169,8 +172,8 @@ GH_TOKEN=<classic PAT: repo + workflow scopes> \
   ./scripts/push-to-github.sh <github-username>
 ```
 
-2. **GitHub Pages** goes live at `https://<user>.github.io/hazina-assist/` within ~a minute — a static showcase of the build (capabilities, guarantee chain, eval results) served from `docs/`.
-3. **Vercel:** in the dashboard → *Add New → Project* → import `hazina-assist` → *Deploy*. No env vars needed for the demo: the build provisions the SQLite DB (`scripts/vercel-build.sh`), the bundle carries it (`outputFileTracingIncludes`), and each lambda clones it to a writable `/tmp` copy at cold start (`src/lib/db.ts`). For production, set `HAZINA_INTENT_SECRET` + a Postgres `DATABASE_URL` in project settings.
+2. **GitHub Pages** goes live at `https://<user>.github.io/hazina-assist/` within ~a minute — a static showcase of the build (capabilities, guarantee chain, eval results) served from `docs/`, linking to the live app.
+3. **Vercel:** *Add New → Project* → import `hazina-assist` → *Deploy* (or the one-click clone URL above). No env vars needed for the demo: the build provisions the SQLite DB (`scripts/vercel-build.sh`), the bundle carries it (`outputFileTracingIncludes`), and the single API function clones it to a writable `/tmp` copy at cold start (`src/lib/db.ts`). For production, set `HAZINA_INTENT_SECRET` + a Postgres `DATABASE_URL` in project settings.
 
 > **Honest note on the demo DB:** writes (chat history, audit events, staged transfers) live for the life of a lambda instance and reset to seed state when it recycles. That is a deliberate demo trade-off — the persistence contract (Prisma models, audit chain, idempotency) is unchanged; point `DATABASE_URL` at Postgres and everything works without code changes.
 

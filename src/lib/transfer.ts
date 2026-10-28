@@ -85,13 +85,35 @@ export async function proposeTransfer(
   }
 
   // Default account: the customer's first current account (server-side)
-  const sess = await db.chatSession.findUnique({ where: { id: sessionId }, include: { customer: { include: { accounts: true } } } });
+  const sess = await db.chatSession.findUnique({
+    where: { id: sessionId },
+    include: { customer: { include: { accounts: true, beneficiaries: true } } },
+  });
   const primary = sess?.customer.accounts.find((a) => a.type === "current") ?? sess?.customer.accounts[0];
   proposal.fromAccountHandle = primary?.handle ?? null;
   if (proposal.destinationType === "internal" && !proposal.destination && primary) {
     // internal transfers to "my savings" style intents default to the customer's other account
     const other = sess?.customer.accounts.find((a) => a.id !== primary.id);
     if (other) proposal.destination = other.rawNumber;
+  }
+
+  // Saved-beneficiary resolution: when the customer names a payee on file
+  // ("Tuma 2500 kwa Jane"), the channel + destination come from the
+  // beneficiary record — no number re-entry for established payees, and the
+  // deterministic path stays LLM-free. Full-name or first-name match,
+  // case-insensitive.
+  if (proposal.beneficiaryName && !proposal.destination && sess) {
+    const mentioned = proposal.beneficiaryName.toLowerCase();
+    const saved = sess.customer.beneficiaries.find((b) => {
+      const name = b.name.toLowerCase();
+      const first = name.split(/\s+/)[0];
+      return name === mentioned || first === mentioned;
+    });
+    if (saved) {
+      proposal.destinationType = proposal.destinationType ?? saved.destinationType;
+      proposal.destination = proposal.destination ?? saved.destination;
+      proposal.beneficiaryName = saved.name;
+    }
   }
 
   // LLM gap-fill for missing fields (constrained JSON)

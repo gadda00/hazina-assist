@@ -132,9 +132,9 @@
       <a href="#evals">Evaluations</a>
       <a href="#repo">Repository</a>
     </nav>
-    <a class="ghbtn" href="https://github.com/" id="ghlink" target="_blank" rel="noopener">
+    <a class="ghbtn" href="https://github.com/gadda00/hazina-assist" id="ghlink" target="_blank" rel="noopener">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      <span id="ghlabel">Source</span>
+      <span id="ghlabel">Repository</span>
     </a>
   </div>
 </header>
@@ -145,9 +145,10 @@
     <h1>A bank-grade AI assistant,<br>built for <span class="grad">Kenyan banking</span> rules.</h1>
     <p class="sub">Policy and tariff Q&A with <b>citations</b>. Account tools with opaque handles. Transfers the model can <b>propose but never execute</b> — signed intents, OTP, and a human officer in the loop. Every decision lands on a <b>hash-chained audit log</b>.</p>
     <div class="ctas">
-      <a class="btn btn-p" href="#capabilities">Explore the build</a>
-      <a class="btn btn-s" href="#guarantee">How money stays safe</a>
+      <a class="btn btn-p" id="liveapp" href="https://hazina-assist.vercel.app" target="_blank" rel="noopener">Open the live app&nbsp;&nbsp;→</a>
+      <a class="btn btn-s" href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgadda00%2Fhazina-assist" target="_blank" rel="noopener">Deploy your own instance</a>
     </div>
+    <p style="margin-top:14px;font-size:12.5px;color:var(--t3)">The live app is the real implementation — chat with the orchestrator in English, Swahili or Sheng, stage a transfer through OTP, approve it in the ops console, watch the audit chain verify. Demo data is synthetic and resets when the serverless instance recycles.</p>
     <div class="hero-badges">
       <span class="hb">tests <b>46/46</b></span>
       <span class="hb">eval gate <b>100%</b></span>
@@ -156,6 +157,7 @@
       <span class="hb">fee numeric match <b>100%</b></span>
       <span class="hb">audit chain <b>verified</b></span>
       <span class="hb">EN · SW · <b>Sheng</b></span>
+      <span class="hb">vercel-ready <b>single-function API</b></span>
     </div>
   </div>
 </div>
@@ -318,23 +320,15 @@
   <div class="wrap">
     <div class="fbrand">HAZINA ASSIST</div>
     <p>A capability demonstration. All customers, accounts, tariffs and payslips are <b style="color:var(--t2)">100% synthetic data</b> — no real customer information is used or stored.</p>
-    <p style="margin-top:8px">Next.js 16 · TypeScript · Prisma · <span style="font-family:var(--mono)">@hazina/kit</span> · FastAPI · <a href="https://github.com/" id="ghfooter">Source on GitHub</a></p>
+    <p style="margin-top:8px">Next.js 16 · TypeScript · Prisma · <span style="font-family:var(--mono)">@hazina/kit</span> · FastAPI · <a href="https://github.com/gadda00/hazina-assist" id="ghfooter">Source on GitHub</a></p>
   </div>
 </footer>
 
 <script>
-/* Repo links are relative to this page when it is served from the repo's
-   GitHub Pages site: https://<user>.github.io/<repo>/  */
-(function(){
-  var user = new URLSearchParams(location.search).get("user");
-  var repo = new URLSearchParams(location.search).get("repo") || "hazina-assist";
-  var guess = user ? "https://github.com/" + user + "/" + repo : null;
-  if (guess) {
-    document.getElementById("ghlink").href = guess;
-    document.getElementById("ghlabel").textContent = "Repository";
-    document.getElementById("ghfooter").href = guess;
-  }
-})();
+/* The GitHub links are hardcoded to the live repository. The live-app URL
+   is set to the default Vercel project URL — update the #liveapp href in the
+   hero after the first deploy if Vercel assigns a different subdomain
+   (see DEPLOY.md). */
 </script>
 </body>
 </html>

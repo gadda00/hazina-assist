@@ -10,9 +10,11 @@ const nextConfig: NextConfig = {
   },
   // Allow the sandbox preview proxy to load _next/* assets in dev.
   allowedDevOrigins: ["*.space-z.ai", "localhost"],
-  // The demo SQLite DB ships with the standalone server (Vercel/k8s deploys).
+  // The demo SQLite DB ships with the standalone server (Vercel/k8s deploys);
+  // .prisma/** pins the native query engine into the serverless bundle so the
+  // single API function can open SQLite on Vercel's read-only FS.
   outputFileTracingIncludes: {
-    "/**": ["./db/**", "./prisma/**"],
+    "/**": ["./db/**", "./prisma/**", "./node_modules/.prisma/**"],
   },
   // The reusable kit ships raw TypeScript; transpile it into the app build.
   transpilePackages: ["@hazina/kit"],

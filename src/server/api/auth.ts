@@ -2,7 +2,17 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { appendEvent } from "@/lib/audit";
 
-/** Demo login: pick a synthetic customer, open a chat session. */
+/**
+ * POST /api/auth/login — demo login: pick a synthetic customer, open a chat
+ * session. GET /api/auth/login — list the demo customers.
+ *
+ * Handlers live in src/server/api/* instead of per-endpoint files under
+ * src/app/api so the whole API ships as ONE serverless function
+ * (src/app/api/[[...path]]/route.ts): on Vercel, each per-endpoint file
+ * becomes its own lambda with its own /tmp, which would split the SQLite
+ * demo DB across functions and break the cross-route HITL flows
+ * (chat stages → ops decides → audit proves).
+ */
 export async function POST(req: Request) {
   try {
     const { customerId } = (await req.json()) as { customerId?: string };

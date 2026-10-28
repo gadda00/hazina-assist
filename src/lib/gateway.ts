@@ -42,19 +42,36 @@ const estTokens = (s: string) => Math.ceil(s.length / 4);
 
 // Demo vault for the current call only — persisted copies are stored by the
 // caller if needed for audit; originals never reach the external model.
+
+/** Hard deadline for any external model attempt (env-tunable). A model call
+ *  without a deadline can blackhole the request thread forever; on timeout we
+ *  count a breaker failure and fall back to the deterministic composer. */
+const MODEL_DEADLINE_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 6_000);
+
 async function tryExternalCall(messages: GatewayMessage[]): Promise<string | null> {
   if (Date.now() < breaker.openUntil) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`model deadline exceeded (${MODEL_DEADLINE_MS}ms)`)),
+      MODEL_DEADLINE_MS
+    );
+    (timer as unknown as { unref?: () => void }).unref?.(); // don't hold the event loop
+  });
   try {
-    const mod = "z-ai-web-dev-sdk";
-    const ZAI = (await import(mod/* @vite-ignore */)).default;
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: messages.map((m) => ({
-        role: m.role === "system" ? "assistant" : m.role,
-        content: m.content,
-      })),
-      thinking: { type: "disabled" },
-    });
+    const attempt = (async () => {
+      const mod = "z-ai-web-dev-sdk";
+      const ZAI = (await import(mod/* @vite-ignore */)).default;
+      const zai = await ZAI.create();
+      return await zai.chat.completions.create({
+        messages: messages.map((m) => ({
+          role: m.role === "system" ? "assistant" : m.role,
+          content: m.content,
+        })),
+        thinking: { type: "disabled" },
+      });
+    })();
+    const completion = await Promise.race([attempt, deadline]);
     const content = completion?.choices?.[0]?.message?.content;
     if (!content || !content.trim()) throw new Error("empty completion");
     breaker.failures = 0;
@@ -67,6 +84,8 @@ async function tryExternalCall(messages: GatewayMessage[]): Promise<string | nul
       console.warn("[gateway] circuit opened for 60s:", (err as Error).message);
     }
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

@@ -21,7 +21,7 @@ export async function GET() {
   });
 }
 
-/** GET /api/health?tools=1 — also list the registered tool specs. */
+/** POST /api/health — also list the registered tool specs. */
 export async function POST() {
   return NextResponse.json({
     tools: listTools(),
