@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "bun run vercel-build",
+  "buildCommand": "bash scripts/vercel-build.sh",
   "installCommand": "bun install",
   "regions": ["fra1"],
-  "notes": "App runs zero-config on SQLite for the demo. Set HAZINA_INTENT_SECRET and DATABASE_URL (Postgres) in project env vars for any real deployment. fra1 = EU region closest to Kenya with Vercel coverage."
+  "notes": "Zero-config demo: DATABASE_URL defaults to the bundled SQLite DB (cloned to /tmp per lambda instance — writes reset when the instance recycles). For production: set HAZINA_INTENT_SECRET (HMAC intent signing) and a Postgres DATABASE_URL in project env vars. fra1 = EU region closest to Kenya with Vercel coverage."
 }

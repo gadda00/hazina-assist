@@ -14,7 +14,7 @@
     "eval": "bun run src/eval/run.ts",
     "seed": "bun run prisma/seed.ts",
     "test": "bun test",
-    "vercel-build": "bun run db:push && bun run seed && bun run build"
+    "vercel-build": "bash scripts/vercel-build.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

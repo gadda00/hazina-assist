@@ -160,6 +160,20 @@ Screenshots of every step live in `docs/screenshots/`.
 - **Local / serverless demo:** runs on SQLite (zero-config). Deploy the Next.js app anywhere (Vercel-ready: `vercel.json` included).
 - **Production posture:** docker-compose (`deploy/docker-compose.yml`) with Postgres, the categoriser service, Prometheus scraping `/api/metrics` and Grafana; Helm chart for k8s (`deploy/helm/`). Set `HAZINA_INTENT_SECRET` and `DATABASE_URL` in the environment — never in code.
 
+### Ship it: GitHub, Pages and Vercel in three steps
+
+```bash
+# 1. Push (creates the repo, enables GitHub Pages from main /docs,
+#    sets topics — token used via HTTP headers only, never stored):
+GH_TOKEN=<classic PAT: repo + workflow scopes> \
+  ./scripts/push-to-github.sh <github-username>
+```
+
+2. **GitHub Pages** goes live at `https://<user>.github.io/hazina-assist/` within ~a minute — a static showcase of the build (capabilities, guarantee chain, eval results) served from `docs/`.
+3. **Vercel:** in the dashboard → *Add New → Project* → import `hazina-assist` → *Deploy*. No env vars needed for the demo: the build provisions the SQLite DB (`scripts/vercel-build.sh`), the bundle carries it (`outputFileTracingIncludes`), and each lambda clones it to a writable `/tmp` copy at cold start (`src/lib/db.ts`). For production, set `HAZINA_INTENT_SECRET` + a Postgres `DATABASE_URL` in project settings.
+
+> **Honest note on the demo DB:** writes (chat history, audit events, staged transfers) live for the life of a lambda instance and reset to seed state when it recycles. That is a deliberate demo trade-off — the persistence contract (Prisma models, audit chain, idempotency) is unchanged; point `DATABASE_URL` at Postgres and everything works without code changes.
+
 ## Honest scope notes
 
 - The mock core banking mirrors Co-opConnect shapes (message references, idempotency, statement/transfer services) with synthetic data; a thin adapter to their sandbox would slot in behind the same interface.
