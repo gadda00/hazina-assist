@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: hazina-app
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ["app:3000"]
+
+  - job_name: hazina-categoriser
+    metrics_path: /health
+    static_configs:
+      - targets: ["categoriser:8000"]

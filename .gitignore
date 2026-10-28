@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+
+# database (demo SQLite)
+db/*.db
+db/*.db-journal
+
+# env & secrets
+.env
+.env.local
+.env*.local
+!.env.example
+
+# logs
+dev.log
+server.log
+*.log
+
+# sandbox plumbing
+.zscripts/
+Caddyfile
+examples/
+mini-services/
+skills/
+upload/
+download/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.pnpm-debug.log*
+
+# prisma generated
+node_modules/.prisma/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

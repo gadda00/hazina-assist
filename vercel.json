@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "bun run vercel-build",
+  "installCommand": "bun install",
+  "regions": ["fra1"],
+  "notes": "App runs zero-config on SQLite for the demo. Set HAZINA_INTENT_SECRET and DATABASE_URL (Postgres) in project env vars for any real deployment. fra1 = EU region closest to Kenya with Vercel coverage."
+}

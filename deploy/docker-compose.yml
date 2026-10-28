@@ -1,0 +1,67 @@
+# Hazina Assist — full local stack
+#   app (Next.js, port 3000) + categoriser (DS service, 8001)
+#   + Postgres + Prometheus + Grafana
+# Usage:  cd deploy && docker compose up -d
+# App runs on SQLite by default; set DATABASE_URL below to use Postgres.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-file:/app/db/custom.db}
+      HAZINA_INTENT_SECRET: ${HAZINA_INTENT_SECRET:-dev-only-secret-rotate-me}
+      CATEGORISER_URL: http://categoriser:8000
+    depends_on:
+      - categoriser
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  categoriser:
+    build:
+      context: ../services/categoriser
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hazina
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hazina}
+      POSTGRES_DB: hazina
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # To point the app at Postgres:
+    #   DATABASE_URL=postgresql://hazina:hazina@postgres:5432/hazina
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3300:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:

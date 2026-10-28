@@ -1,0 +1,164 @@
+openapi: 3.1.0
+info:
+  title: Hazina Categoriser
+  description: "Transaction narrative categoriser \u2014 Data Science model service\
+    \ (demo)."
+  version: categoriser-0.2.0
+paths:
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Health Get
+  /v1/labels:
+    get:
+      summary: Labels
+      description: "The label enum \u2014 the contract surface. Additions are breaking\
+        \ changes."
+      operationId: labels_v1_labels_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Labels V1 Labels Get
+  /v1/categorise:
+    post:
+      summary: Categorise
+      operationId: categorise_v1_categorise_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoriseIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriseOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/model-card:
+    get:
+      summary: Model Card
+      description: Machine-readable model card (mirrors MODEL_CARD.md).
+      operationId: model_card_v1_model_card_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Model Card V1 Model Card Get
+components:
+  schemas:
+    CategoriseIn:
+      properties:
+        narrative:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Narrative
+          examples:
+          - KPLC electricity tokens
+        k:
+          type: integer
+          maximum: 3.0
+          minimum: 1.0
+          title: K
+          description: top-k predictions
+          default: 1
+      type: object
+      required:
+      - narrative
+      title: CategoriseIn
+    CategoriseOut:
+      properties:
+        category:
+          type: string
+          title: Category
+        confidence:
+          type: number
+          title: Confidence
+        topk:
+          items:
+            $ref: '#/components/schemas/Prediction'
+          type: array
+          title: Topk
+        model_version:
+          type: string
+          title: Model Version
+        latency_ms:
+          type: number
+          title: Latency Ms
+      type: object
+      required:
+      - category
+      - confidence
+      - topk
+      - model_version
+      - latency_ms
+      title: CategoriseOut
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Prediction:
+      properties:
+        category:
+          type: string
+          title: Category
+        confidence:
+          type: number
+          title: Confidence
+      type: object
+      required:
+      - category
+      - confidence
+      title: Prediction
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

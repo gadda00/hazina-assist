@@ -1,0 +1,38 @@
+# Default values — override per environment.
+replicaCount: 2
+
+image:
+  app:
+    repository: ghcr.io/gadda00/hazina-assist
+    tag: "0.1.0"
+  categoriser:
+    repository: ghcr.io/gadda00/hazina-categoriser
+    tag: "0.2.0"
+
+app:
+  port: 3000
+  env:
+    HAZINA_INTENT_SECRET: "set-me-via-external-secret"
+    CATEGORISER_URL: "http://hazina-categoriser:8000"
+    # DATABASE_URL: postgres connection via secret
+
+categoriser:
+  port: 8000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: hazina.example.co.ke
+
+resources:
+  app:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  categoriser:
+    requests: { cpu: 100m, memory: 128Mi }
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    path: /api/metrics
+    interval: 15s

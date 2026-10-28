@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hazina-assist
+description: Bank-grade AI assistant — chat app + DS categoriser service (demo)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

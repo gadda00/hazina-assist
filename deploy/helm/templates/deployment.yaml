@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-app
+  labels: { app: hazina-assist, component: app }
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: { app: hazina-assist, component: app }
+  template:
+    metadata:
+      labels: { app: hazina-assist, component: app }
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.app.repository }}:{{ .Values.image.app.tag }}"
+          ports: [{ containerPort: {{ .Values.app.port }} }]
+          env:
+            - name: HAZINA_INTENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: intent-secret
+            - name: CATEGORISER_URL
+              value: {{ .Values.app.env.CATEGORISER_URL | quote }}
+          readinessProbe:
+            httpGet: { path: /api/health, port: {{ .Values.app.port }} }
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: {{ .Values.app.port }} }}
+          resources: {{ toYaml .Values.resources.app | nindent 12 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-categoriser
+  labels: { app: hazina-assist, component: categoriser }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: hazina-assist, component: categoriser }
+  template:
+    metadata:
+      labels: { app: hazina-assist, component: categoriser }
+    spec:
+      containers:
+        - name: categoriser
+          image: "{{ .Values.image.categoriser.repository }}:{{ .Values.image.categoriser.tag }}"
+          ports: [{ containerPort: {{ .Values.categoriser.port }} }]
+          readinessProbe:
+            httpGet: { path: /health, port: {{ .Values.categoriser.port }} }

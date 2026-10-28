@@ -1,0 +1,14 @@
+{
+  "name": "@hazina/kit",
+  "version": "0.1.0",
+  "description": "Hazina Kit — reusable guardrails, audit hash-chain, intent signing, PII pseudonymisation and evaluation harness for bank-grade LLM applications",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src", "README.md"],
+  "keywords": ["llm", "guardrails", "audit", "banking", "kenya", "cbk"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gadda00/hazina-assist"
+  }
+}

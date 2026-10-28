@@ -1,0 +1,257 @@
+// Hazina Assist — bank-grade AI assistant (demo system)
+// SQLite for local/serverless demo; switch provider to postgres for production
+// (see docs/adr/ADR-002-database-strategy.md)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & core banking (synthetic data, Co-opConnect-shaped mock)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String   @unique // normalised +254...
+  email     String?
+  kraPin    String?
+  role      String    @default("customer") // customer | credit_officer | approver
+  createdAt DateTime  @default(now())
+  accounts  Account[]
+  sessions  ChatSession[]
+  beneficiaries Beneficiary[]
+}
+
+model Account {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  handle       String   @unique // opaque handle "acct_7f3a" — never the raw number
+  maskedNumber String // e.g. ****1234
+  rawNumber    String // server-side only, never sent to the LLM
+  type         String // current | savings
+  currency     String   @default("KES")
+  balanceKes   Float
+  createdAt    DateTime @default(now())
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  txnRef      String   @unique // core-banking transaction reference
+  messageRef  String // Co-opConnect-style message reference (idempotency)
+  type        String // transfer_in | transfer_out | fee | interest | deposit
+  direction   String // credit | debit
+  amount      Float
+  channel     String? // internal | mpesa | pesalink | agent | branch
+  counterparty String?
+  narrative   String
+  category    String? // enriched by the Data Science categoriser service
+  status      String   @default("completed") // completed | pending | failed
+  ts          DateTime @default(now())
+}
+
+model Beneficiary {
+  id             String   @id @default(cuid())
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id])
+  name           String
+  destinationType String // mpesa | internal | pesalink
+  destination    String // phone or account number
+  firstUsedAt    DateTime?
+  createdAt      DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Conversation & orchestration
+// ---------------------------------------------------------------------------
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  customerId String
+  customer  Customer @relation(fields: [customerId], references: [id])
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  messages  Message[]
+  auditEvents AuditEvent[]
+  approvals ApprovalTask[]
+  otps      OtpCode[]
+  pending   PendingAction[]
+  intents   TransferIntent[]
+  packs     PayslipPack[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+  role      String // user | assistant | system
+  content   String
+  trace     String? // JSON: route, guard verdicts, tools, citations, latency, model
+  createdAt DateTime @default(now())
+}
+
+// Mid-flow state (OTP step-up, confirmation) — kept server-side, outside LLM context
+model PendingAction {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+  kind      String // otp_wait | intent_staged
+  payload   String // JSON
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Transfers: signed intents, HITL approvals, idempotency
+// ---------------------------------------------------------------------------
+
+model TransferIntent {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         ChatSession @relation(fields: [sessionId], references: [id])
+  fromAccountId   String
+  beneficiaryName String
+  destinationType String // mpesa | internal | pesalink
+  destination     String
+  amount          Float
+  currency        String   @default("KES")
+  purpose         String?
+  signedBody      String // JSON body (sid, intent, exp, nonce)
+  sig             String // HMAC-SHA256 hex
+  nonce           String
+  exp             Int // unix seconds
+  status          String   @default("staged") // staged | otp_verified | pending_approval | executed | rejected | expired
+  executedTxnRef  String?
+  idempotencyKey  String?
+  createdAt       DateTime @default(now())
+}
+
+model ApprovalTask {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+  type      String // transfer | loan_pack
+  refId     String // TransferIntent id or PayslipPack id
+  payload   String // JSON snapshot for the console
+  riskLevel String   @default("low") // low | medium | high
+  status    String   @default("open") // open | approved | rejected | expired
+  reason    String?
+  decidedBy String?
+  decidedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+  code      String
+  purpose   String   @default("step_up_transfer")
+  consumed  Boolean  @default(false)
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model IdempotencyKey {
+  key        String   @id
+  response   String // JSON response replay
+  createdAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Audit: append-only, hash-chained (tamper-evident)
+// ---------------------------------------------------------------------------
+
+model AuditEvent {
+  id        Int      @id @default(autoincrement())
+  sessionId String?
+  session   ChatSession? @relation(fields: [sessionId], references: [id])
+  actor     String // customer:<id> | approver:<id> | system:<node>
+  eventType String // guard_in, route, rag_answer, tool_call, intent_signed, ...
+  payload   String // JSON, PII-redacted
+  prevHash  String
+  hash      String
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge base (RAG) — tariff rows + prose chunks
+// ---------------------------------------------------------------------------
+
+model TariffRow {
+  id            String  @id @default(cuid())
+  product       String // e.g. "Eazzy Banking", "Current Account"
+  channel       String // send_to_mpesa | internal_transfer | pesalink | withdrawal_agent | ...
+  bandMin       Float   @default(0)
+  bandMax       Float? // null = no upper bound
+  feeType       String  @default("flat") // flat | percent
+  feeValue      Float
+  minFee        Float?
+  maxFee        Float?
+  effectiveDate String // "2026-10-22"
+  docId         String
+  page          Int
+}
+
+model KnowledgeChunk {
+  id            String   @id @default(cuid())
+  docId         String // tariff-guide-2026-10-22 | product-faq | ...
+  page          Int
+  title         String
+  breadcrumb    String // "Fees & Tariffs > Eazzy Banking > Transfers"
+  text          String
+  effectiveDate String?
+  keywords      String // pre-computed lexical hints
+}
+
+// ---------------------------------------------------------------------------
+// Intelligent document processing (payslip → pre-qualification pack)
+// ---------------------------------------------------------------------------
+
+model PayslipPack {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       ChatSession @relation(fields: [sessionId], references: [id])
+  fileName      String
+  docKind       String   @default("clean") // clean | scanned | user_upload
+  fields        String // JSON: Field<T> with value/confidence/evidence
+  validation    String // JSON: rule results
+  affordability String // JSON: deterministic affordability computation
+  summary       String // AI summary for the credit officer
+  status        String   @default("awaiting_review") // awaiting_review | recommended | declined | approved
+  decidedBy     String?
+  decidedAt     DateTime?
+  createdAt     DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation
+// ---------------------------------------------------------------------------
+
+model EvalRun {
+  id         String   @id @default(cuid())
+  model      String
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  passed     Boolean  @default(false)
+  totals     String // JSON summary
+  cases      String // JSON per-case results
+}
+
+// Pseudonymisation vault (gateway proxy): reversible token ↔ original
+model PseudonymVault {
+  id        String  @id @default(cuid())
+  sessionId String
+  token     String // TOK_NAME_1 ...
+  original  String
+  piiType   String
+}
