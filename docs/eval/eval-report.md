@@ -1,7 +1,7 @@
 # Hazina Assist — Evaluation Report
 
-**Run ID:** `cmvrqhzlm0062jq72ac2619hm`
-**Date:** 2026-10-28T06:29:18.586Z
+**Run ID:** `cmvrw92rt0062pwiqhedvvlgc`
+**Date:** 2026-10-28T09:10:20.488Z
 **Golden set:** 55 cases (intent × language × risk)
 **Model path:** rules+gateway (see per-case model backend) — deterministic paths (router rules, fee tool, guardrails, policy) + model gateway where applicable
 **Result:** ✅ **PASS** (CI gate)
@@ -17,7 +17,7 @@
 | Refusal recall | 1.000 | = 1.00 |
 | Citation rate (RAG answers) | 100.0% | — |
 | Fee numeric match | 100.0% | = 100% |
-| Latency P50 / P95 | 8ms / 1910ms | — |
+| Latency P50 / P95 | 6ms / 2174ms | — |
 
 ## By language (English / Swahili / code-mixed Sheng)
 

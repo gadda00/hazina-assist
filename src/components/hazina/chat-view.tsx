@@ -132,7 +132,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
       <div className="grid lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-4">
         {/* ------------------------- Chat column ------------------------- */}
-        <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm min-h-[70vh] max-h-[86vh]">
+        <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm min-h-[70vh] max-h-[86vh] min-w-0">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-emerald-700" />
@@ -224,7 +224,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
         </div>
 
         {/* ---------------------- Explainability panel ---------------------- */}
-        <div className={`${showTrace ? "" : "hidden lg:block"}`}>
+        <div className={`min-w-0 ${showTrace ? "" : "hidden lg:block"}`}>
           <TracePanel session={session} last={lastAssistant} />
         </div>
       </div>
@@ -367,7 +367,7 @@ function MessageBubble({
                 <Wrench className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <span className="font-mono font-medium text-slate-700">{tc.name}</span>
-                  <span className="font-mono text-slate-500"> {JSON.stringify(tc.args)}</span>
+                  <span className="font-mono text-slate-500 break-all"> {JSON.stringify(tc.args)}</span>
                 </div>
               </div>
             ))}
@@ -452,7 +452,7 @@ function TracePanel({ session, last }: { session: SessionInfo; last?: Msg }) {
               <div key={i} className="flex gap-2 text-[11px]">
                 <span className="font-mono text-slate-400 w-10 shrink-0 text-right">{e.at}ms</span>
                 <span className={`font-mono px-1.5 rounded ${nodeColor(e.node)} shrink-0`}>{e.node}</span>
-                <span className="text-slate-600 truncate" title={JSON.stringify(e.detail)}>
+                <span className="text-slate-600 truncate min-w-0" title={JSON.stringify(e.detail)}>
                   {summariseDetail(e.node, e.detail)}
                 </span>
               </div>
