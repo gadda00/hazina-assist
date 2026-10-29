@@ -21,6 +21,7 @@ Checks:
      receipt (ok + replayed) and never double-debits
 """
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -32,7 +33,8 @@ urllib.request.install_opener(
     urllib.request.build_opener(urllib.request.ProxyHandler({}))
 )
 
-BASE = "http://127.0.0.1:3100"
+BASE = os.environ.get("HAZINA_BASE_URL", "http://127.0.0.1:3100")
+LOCAL_SIM = BASE.startswith("127.0.0.1") or BASE.startswith("localhost")
 TMP_DB = "/tmp/hazina-demo.db"
 results = []
 
@@ -128,9 +130,10 @@ def main():
     m = re.search(r"\b(\d{6})\b", reply)
     if m:
         otp = m.group(1)
-    if not otp:
+    if not otp and LOCAL_SIM:
+        # fallback only meaningful against the local simulation (reads /tmp)
         otp = latest_otp(session_id)
-    check("chat: transfer -> OTP step-up", st == 200 and bool(otp), f"otp {'from reply' if m else 'from /tmp db'}")
+    check("chat: transfer -> OTP step-up", st == 200 and bool(otp), f"otp {'from reply' if m else 'from /tmp db' if LOCAL_SIM else 'from reply'}")
 
     # 9. OTP completion -> staged intent + HITL task
     st, body = call("POST", "/api/chat", {"sessionId": session_id, "message": otp}, token=token)
