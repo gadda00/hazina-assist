@@ -52,6 +52,10 @@ function resolveDatasourceUrl(): string | undefined {
 
   const candidates = [
     path.resolve(process.cwd(), 'db', 'custom.db'),
+    // Fallback for builds where a relative DATABASE_URL made the prisma CLI
+    // seed against the schema dir (prisma/db/custom.db) — that file is traced
+    // into the bundle by ./prisma/** too, so it is a valid runtime source.
+    path.resolve(process.cwd(), 'prisma', 'db', 'custom.db'),
     // Common serverless function roots (Vercel lambdas) — cwd is usually
     // /var/task already, but tracing can place the project one level deeper.
     '/var/task/db/custom.db',

@@ -14,7 +14,10 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-export DATABASE_URL="${DATABASE_URL:-file:./db/custom.db}"
+# ABSOLUTE path: the prisma CLI resolves relative file: URLs against the
+# SCHEMA directory (prisma/), which would seed prisma/db/custom.db while the
+# runtime resolver looks for db/custom.db — the two must agree.
+export DATABASE_URL="${DATABASE_URL:-file:$(pwd)/db/custom.db}"
 
 echo "◆ prisma db push (provisioning demo schema at $DATABASE_URL)"
 bun run db:push
