@@ -17,7 +17,9 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile || bun install
       - run: bun run lint
-      - run: bunx tsc --noEmit || echo "typecheck warnings (ignoreBuildErrors=true in demo)"
+      # typecheck is a HARD gate — no `|| echo` escape (see scripts and
+      # tsconfig: only project dirs are included, sandbox scaffolding excluded)
+      - run: bun run typecheck
 
   unit-tests:
     name: unit + contract tests

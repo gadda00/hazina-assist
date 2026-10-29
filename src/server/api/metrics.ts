@@ -1,13 +1,18 @@
 import { db } from "@/lib/db";
+import { requireDemoOfficer } from "@/lib/authz";
+import { ERR } from "@/lib/schemas";
 
 /**
  * GET /api/metrics — Prometheus text exposition format, fed by REAL data:
  * guardrail trip counts, escalation rate, latency and cost aggregates from
  * the audit chain. Prometheus scrapes this in the Compose deployment
  * (deploy/prometheus.yml); the Ops console "Monitoring" tab renders the same
- * numbers directly.
+ * numbers directly. Officer-only.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireDemoOfficer(req);
+  if (!auth.ok) return auth.response;
+  try {
   const events = await db.auditEvent.findMany({ take: 5000 });
   const payloads = events.map((e) => {
     try { return JSON.parse(e.payload) as Record<string, unknown>; } catch { return {}; }
@@ -65,4 +70,8 @@ export async function GET() {
   return new Response(lines.join("\n"), {
     headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
   });
+  } catch (e) {
+    console.error("[metrics]", e);
+    return ERR.internal();
+  }
 }

@@ -7,6 +7,7 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -97,7 +98,14 @@
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
   },
-  "description": "Hazina Assist \u2014 bank-grade AI assistant: RAG + tool-calling + IDP with guardrails, HITL, audit and evaluation",
+  "description": "Hazina Assist — safety-oriented synthetic banking demo: governed RAG with citations, tool-calling, OTP + human approval for transfers, hash-chained audit, eval CI gate",
+  "trustedDependencies": [
+    "@prisma/client",
+    "@prisma/engines",
+    "prisma",
+    "sharp",
+    "esbuild"
+  ],
   "prisma": {
     "seed": "bun run prisma/seed.ts"
   }

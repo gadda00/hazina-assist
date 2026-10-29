@@ -46,7 +46,7 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
 ### What to expect after deploying
 
 - The URL is `https://<project-name>.vercel.app` (usually
-  `hazina-assist.vercel.app`; Vercel appends a suffix if the name is taken —
+  `hazina-assist-pfb8.vercel.app`; Vercel appends a suffix if the name is taken —
   if so, update the `#liveapp` href in `docs/index.html`).
 - Demo data **resets** when the serverless instance recycles. All data is
   100% synthetic; there is nothing to protect.
@@ -60,6 +60,7 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
 | Variable | Effect |
 |---|---|
 | `HAZINA_INTENT_SECRET` | Real HMAC secret for signing transfer intents. Unset → a `dev-only-secret-rotate-me` placeholder is used (fine for the demo; the point is the signing architecture, not the secret). |
+| `DEMO_MODE` | `true` (default) shows the OTP code in the chat UI's demo SMS card — the demo's OTP channel. `false` hides it (simulates a real SMS delivery). |
 | `MODEL_TIMEOUT_MS` | Deadline for external model calls before fallback (default `6000`). |
 | `DATABASE_URL` | **Leave unset for the demo.** Set a Postgres URL for a persistent, production-shaped deployment — non-file URLs pass through untouched (`src/lib/db.ts`). |
 
@@ -69,7 +70,7 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
 |---|---|
 | `Invalid request: should NOT have additional property \`notes\`. Please remove it.` (or any other property name) at deploy time | `vercel.json` contained a key outside Vercel's strict config schema — Vercel validates it before the build starts. Only schema-defined keys are allowed (commentary belongs in this file, not the JSON). This bit us once with a `notes` field; fixed and regression-checked against the published schema. |
 | Deploy fails with a plan/region error | A `regions` entry in `vercel.json` needs Pro+. Region is a dashboard setting instead — see above. |
-| The URL isn't `hazina-assist.vercel.app` | Vercel appended a suffix (project name taken) or you renamed the project. Update the `#liveapp` href in `docs/index.html` and the links in `README.md`. |
+| The URL isn't `hazina-assist-pfb8.vercel.app` | Vercel appended a suffix (project name taken) or you renamed the project. Update the `#liveapp` href in `docs/index.html` and the links in `README.md`. |
 | Answers feel canned / model says `deterministic-fallback` | Expected with no model credentials on Vercel — the designed degradation path (ADR-001), asserted by the CI eval gate. |
 | Demo data resets | The `/tmp` DB lives per serverless instance — documented demo posture; set a Postgres `DATABASE_URL` for persistence. |
 

@@ -21,7 +21,7 @@ import { appendEvent } from "@/lib/audit";
 import { routeIntent, type RouteDecision } from "@/lib/router";
 import { ragAnswer } from "@/lib/rag";
 import { callTool, listTools, type Session } from "@/lib/tools";
-import { proposeTransfer, policyGate, issueOtp, verifyOtp, stageSignedIntent, createApprovalForIntent, completeOtpFlow } from "@/lib/transfer";
+import { proposeTransfer, policyGate, issueOtp, verifyOtp, stageSignedIntent, createApprovalForIntent, completeOtpFlow, demoMode } from "@/lib/transfer";
 import { gatewayChat } from "@/lib/gateway";
 import { categorise } from "@/lib/categoriser";
 
@@ -184,7 +184,7 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
     };
   }
 
-  const gate = await policyGate(ctx.sessionId, proposal as never);
+  const gate = await policyGate(ctx.sessionId, proposal);
   await appendEvent({
     sessionId: ctx.sessionId,
     actor: "system:policy_check",
@@ -192,14 +192,14 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
     payload: {
       amount_kes: proposal.amountKes,
       allowed: gate.allowed,
-      reason: gate.allowed ? undefined : ("reason" in gate ? gate.reason : gate.decision.reason),
-      notes: gate.allowed ? gate.decision.notes : undefined,
+      reason: gate.allowed ? undefined : gate.reason,
+      notes: gate.allowed ? gate.notes : undefined,
     },
   });
-  trace(ctx, "policy_check", { allowed: gate.allowed, notes: gate.allowed ? gate.decision.notes : [] });
+  trace(ctx, "policy_check", { allowed: gate.allowed, notes: gate.allowed ? gate.notes : [] });
 
   if (!gate.allowed) {
-    const reason = "reason" in gate ? gate.reason : gate.decision.reason;
+    const reason = gate.reason;
     let reply: string;
     if (String(reason).startsWith("new_beneficiary_cooling_off")) {
       reply =
@@ -222,7 +222,7 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
     data: {
       sessionId: ctx.sessionId,
       kind: "intent_staged",
-      payload: JSON.stringify({ proposal: { ...proposal, riskLevel: gate.decision.riskLevel }, acctId: gate.acct.id }),
+      payload: JSON.stringify({ proposal: { ...proposal, riskLevel: gate.riskLevel }, acctId: gate.acct.id }),
     },
   });
   await appendEvent({
@@ -231,17 +231,28 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
     eventType: "otp_issued",
     payload: { amount_kes: proposal.amountKes, channel: proposal.destinationType },
   });
+  // The demo SMS card: the code is only revealed when DEMO_MODE is on
+  // (default on — synthetic channel; DEMO_MODE=false simulates real SMS).
+  const demoCode = demoMode() ? otp.code : null;
+  const codeHint =
+    lang === "sw"
+      ? demoCode
+        ? ` (demo: msimbo ni ${demoCode})`
+        : ""
+      : demoCode
+        ? ` (demo SMS gateway shows it here: ${demoCode})`
+        : "";
   return {
     reply:
       (lang === "sw"
         ? `Unataka kutuma KES ${(proposal.amountKes ?? 0).toLocaleString()} kwa ${(proposal.beneficiaryName ?? proposal.destination ?? "").toString()} (${proposal.destinationType?.toUpperCase()}). `
         : `You're sending KES ${(proposal.amountKes ?? 0).toLocaleString()} to ${(proposal.beneficiaryName ?? proposal.destination ?? "").toString()} via ${proposal.destinationType?.toUpperCase()}${proposal.destination ? ` (${proposal.destination.replace(/.(?=.{4})/g, "*")})` : ""}. `) +
       (lang === "sw"
-        ? `Kwa usalama, nimetuma msimbo wa 6 taratibu kwa simu yako (demo: ${otp.code}). Ukitipe, tutaendelea.`
-        : `For security I've sent a 6-digit code to your phone (demo SMS gateway shows it here: ${otp.code}). Enter it to continue — the money moves only after a bank officer also approves.`),
+        ? `Kwa usalama, nimetuma msimbo wa 6 taratibu kwa simu yako${codeHint}. Ukitipe, tutaendelea.`
+        : `For security I've sent a 6-digit code to your phone${codeHint}. Enter it to continue — the money moves only after a bank officer also approves.`),
     route: "transfer",
     kind: "otp_required",
-    otp: { issued: true, devCode: otp.code, expiresInSeconds: 300 },
+    otp: { issued: true, devCode: demoCode ?? undefined, expiresInSeconds: 300 },
     pendingIntent: {
       amountKes: proposal.amountKes ?? 0,
       beneficiary: proposal.beneficiaryName ?? proposal.destination ?? "",
@@ -272,7 +283,7 @@ async function idpNode(ctx: RunCtx, lang: string): Promise<Partial<OrchestratorR
 // ---------------------------------------------------------------------------
 
 async function ragNode(ctx: RunCtx, input: string, lang: string): Promise<Partial<OrchestratorResult>> {
-  const r = await ragAnswer({ sessionId: ctx.sessionId, session: ctx.session, input, lang });
+  const r = await ragAnswer({ sessionId: ctx.sessionId, session: ctx.session, input, lang: lang as "en" | "sw" });
   trace(ctx, "rag", {
     kind: r.kind,
     answerability: r.answerabilityScore,

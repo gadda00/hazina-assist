@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import * as auth from "@/server/api/auth";
 import * as chat from "@/server/api/chat";
 import * as approvals from "@/server/api/approvals";
@@ -22,16 +23,21 @@ import * as evalRun from "@/server/api/eval";
  * only dispatches, so endpoints stay as cohesive, individually testable
  * modules.
  *
+ * The dispatcher also mints a request id (x-request-id) and converts any
+ * uncaught handler error into the shared error envelope — no stack traces,
+ * no raw database errors.
+ *
  * Routes (unchanged URLs — the frontend is untouched):
- *   POST/GET /api/auth/login   demo login + customer list
- *   POST/GET /api/chat         orchestrator turn + history
- *   GET/POST /api/approvals    HITL queue + officer decision
- *   GET/POST /api/idp          payslip samples + loan-pack build
- *   GET      /api/audit        hash-chained audit viewer
- *   GET      /api/metrics      Prometheus exposition
+ *   GET/POST /api/auth/login   demo login + customer/officer list
+ *   POST     /api/auth/logout  revoke the caller's demo session
+ *   POST/GET /api/chat         orchestrator turn + history (own session only)
+ *   GET/POST /api/approvals    HITL queue + officer decision (officer-only)
+ *   GET/POST /api/idp          payslip samples + loan-pack build (own session)
+ *   GET      /api/audit        hash-chained audit viewer (officer-only)
+ *   GET      /api/metrics      Prometheus exposition (officer-only)
  *   GET/POST /api/health       liveness + tool specs
  *   GET      /api/tools        least-privilege tool surface
- *   GET      /api/eval         latest golden-set run
+ *   GET      /api/eval         latest golden-set run (officer-only)
  */
 
 type Handler = (req: Request) => Promise<Response>;
@@ -41,8 +47,9 @@ type Handler = (req: Request) => Promise<Response>;
 // composes the answer. 30 s sits inside every plan's function limit.
 export const maxDuration = 30;
 
-const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
+const ROUTES: Record<string, Partial<Record<"GET" | "POST" | "PUT", Handler>>> = {
   "auth/login": { GET: auth.GET, POST: auth.POST },
+  "auth/logout": { PUT: auth.PUT, POST: auth.PUT },
   chat: { GET: chat.GET, POST: chat.POST },
   approvals: { GET: approvals.GET, POST: approvals.POST },
   idp: { GET: idp.GET, POST: idp.POST },
@@ -54,21 +61,53 @@ const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
 };
 
 async function dispatch(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   req: Request,
   ctx: { params: Promise<{ path?: string[] }> }
 ): Promise<Response> {
+  // request id: minted here, visible to handlers via x-request-id and echoed
+  // in every error envelope (see src/lib/schemas.ts).
+  const requestId = `req_${randomBytes(6).toString("hex")}`;
+  const headers = new Headers(req.headers);
+  headers.set("x-request-id", requestId);
+  const init: RequestInit = { method: req.method, headers };
+  if (req.method !== "GET" && req.body) {
+    init.body = req.body;
+    (init as RequestInit & { duplex: "half" }).duplex = "half";
+  }
+  const scoped = new Request(req.url, init);
+
   const { path } = await ctx.params;
   const key = (path ?? []).join("/");
-  const route = ROUTES[key];
-  if (!route) {
-    return NextResponse.json({ error: "not_found", path: `/api/${key}` }, { status: 404 });
+  try {
+    const route = ROUTES[key];
+    if (!route) {
+      return NextResponse.json(
+        { error: { code: "not_found", message: `No such endpoint: /api/${key}`, requestId } },
+        { status: 404 }
+      );
+    }
+    const handler = route[method];
+    if (!handler) {
+      return NextResponse.json(
+        { error: { code: "method_not_allowed", message: `${method} /api/${key} is not supported`, requestId } },
+        { status: 405 }
+      );
+    }
+    return await handler(scoped);
+  } catch (e) {
+    console.error(`[api:${key}]`, requestId, e);
+    return NextResponse.json(
+      {
+        error: {
+          code: "internal_error",
+          message: "Something went wrong on our side. Please retry — nothing was double-charged.",
+          requestId,
+        },
+      },
+      { status: 500 }
+    );
   }
-  const handler = route[method];
-  if (!handler) {
-    return NextResponse.json({ error: "method_not_allowed", path: `/api/${key}`, method }, { status: 405 });
-  }
-  return handler(req);
 }
 
 export async function GET(req: Request, ctx: { params: Promise<{ path?: string[] }> }) {
@@ -77,4 +116,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ path?: string[]
 
 export async function POST(req: Request, ctx: { params: Promise<{ path?: string[] }> }) {
   return dispatch("POST", req, ctx);
+}
+
+export async function PUT(req: Request, ctx: { params: Promise<{ path?: string[] }> }) {
+  return dispatch("PUT", req, ctx);
 }

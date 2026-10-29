@@ -1,8 +1,8 @@
 # Hazina Assist
 
-**A bank-grade AI assistant that maps to every duty in the job ad — controls, integration and operation, not a tutorial chatbot.**
+**A safety-oriented synthetic banking demo that maps to every duty in the job ad — controls, integration and operation, not a tutorial chatbot.**
 
-**Try it live: the deployed app is the real implementation — [`hazina-assist.vercel.app`](https://hazina-assist.vercel.app)** (chat in English/Swahili/Sheng, stage a transfer through OTP, approve it in the ops console, watch the audit chain verify). Static showcase: [`gadda00.github.io/hazina-assist`](https://gadda00.github.io/hazina-assist/) · Source: [`github.com/gadda00/hazina-assist`](https://github.com/gadda00/hazina-assist). Deploy your own instance with one click — see [`DEPLOY.md`](DEPLOY.md).
+**Try it live: the deployed app is the real implementation — [`hazina-assist-pfb8.vercel.app`](https://hazina-assist-pfb8.vercel.app)** (chat in English/Swahili/Sheng, stage a transfer through OTP, approve it in the ops console, watch the audit chain verify). Static showcase: [`gadda00.github.io/hazina-assist`](https://gadda00.github.io/hazina-assist/) · Source: [`github.com/gadda00/hazina-assist`](https://github.com/gadda00/hazina-assist). Deploy your own instance with one click — see [`DEPLOY.md`](DEPLOY.md).
 
 One end-to-end system with four customer-facing capabilities, an operations console, guardrails at every layer, a hash-chained audit trail, human-in-the-loop for every consequential action, and an evaluation gate that fails the PR when quality regresses. Alongside the code sits a governance pack mapped to CBK's draft risk-management instruments and the Data Protection Act 2019.
 
@@ -88,14 +88,15 @@ user: "Send 2000 to Jane on M-Pesa"
 
 ```bash
 bun install
-bun run db:push          # create SQLite schema
+bun run db:push          # create SQLite schema (prisma CLI reads .env)
 bun run seed             # synthetic customers, accounts, tariff guide, KB
 bun run dev              # http://localhost:3000
 
 # quality gates
-bun test                 # 46 unit + contract tests
+bun test                 # 61 unit + contract + safety tests
 bun run eval             # golden set through the REAL orchestrator → docs/eval/eval-report.md
 bun run lint
+bun run typecheck        # tsc --noEmit — a HARD gate, zero known errors
 
 # optional: the DS categoriser service
 cd services/categoriser && pip install -r requirements.txt
@@ -103,7 +104,7 @@ uvicorn main:app --port 8001
 # then: CATEGORISER_URL=http://localhost:8001 bun run dev
 ```
 
-Demo login: pick **Amina Wanjiru** (established beneficiary Jane → transfers flow to OTP + approval) or **Brian Otieno**.
+Demo login: pick **Amina Wanjiru** (established beneficiary Jane → transfers flow to OTP + approval) or **Brian Otieno** — or the clearly-labelled **Demo officer console** entry (Officer Njeri) for the HITL side. Customers and officers get separate server-side sessions; the role split is enforced on every endpoint, not just in the UI.
 
 ### 3-minute demo script
 
@@ -111,7 +112,7 @@ Screenshots of every step live in `docs/screenshots/`.
 
 1. **Fee determinism + citations** — chat: *"nikituma 15k kwa mpesa kutoka coop, charges ni how much?"* → computed fee (KES 23), tariff citation with effective date, `compute_fee` tool call visible in the trace panel. *(fee-answer.png)*
 2. **Guardrails** — quick prompt *"Injection probe"* → refused at `guard_in` (score, signals); the audit chain records the refusal. Then *"Out of scope"* (weather) → answerability gate → handoff, never a guess.
-3. **Transfer end-to-end** — *"Send 2000 to Jane on M-Pesa 0733445566"* → OTP card (dev code shown) → enter code → pending approval → switch to **Ops console → Approval queue** → approve → txn reference + fee returned; audit tab shows `intent_signed → hitl_raised → transfer_executed`, chain verified green. *(console-approvals.png, console-approved.png, console-audit.png)*
+3. **Transfer end-to-end** — *"Send 2000 to Jane on M-Pesa 0733445566"* → OTP card (code shown only in DEMO_MODE, default on) → enter code → pending approval → sign out → **Demo officer console** entry → **Approval queue** → approve → txn reference + fee returned; the customer transcript gets the completion receipt; audit tab shows `intent_signed → hitl_raised → transfer_executed`, chain verified green. Double-clicking approve replays the ORIGINAL receipt — never a second debit. *(console-approvals.png, console-approved.png, console-audit.png)*
 4. **IDP** — *"I want to apply for a loan"* → payslip samples (clean/scanned) → extraction with confidence bars + evidence spans → validation rules → affordability computation → **Loan packs** tab → officer decides. *(console-loanpack.png)*
 5. **Evals** — Ops console → Evaluations: last golden-set run, per-language (EN/SW/Sheng) breakdown, CI gate status. *(console-evals.png)*
 
@@ -179,7 +180,12 @@ GH_TOKEN=<classic PAT: repo + workflow scopes> \
 
 ## Honest scope notes
 
+- **Demo auth model**: sessions are server-side DB records with a random 192-bit bearer token (only its SHA-256 hash is stored); customers and officers get separate role-scoped sessions, every endpoint resolves the session from the token and rejects cross-session reads (403) and customer→officer mutations (403). It is deliberately simple, visible demo IAM — not production IAM: no OIDC, no MFA, no rotation.
+- **OTP is a mock SMS channel**: crypto-random 6-digit codes, bound to the staged intent, single-active (reissue invalidates), 5-minute expiry, 3-attempt lockout. The code renders in the UI only while `DEMO_MODE` is on (default on — set `DEMO_MODE=false` to simulate a real channel).
+- **Money is integer-cents**: every KES computation (fees, debits, balance checks, daily totals) goes through `src/lib/money.ts`; no bare float arithmetic on amounts anywhere in the transfer path.
+- **Approvals are idempotent**: the decision is claimed atomically (`updateMany where status:"open"`), the debit and its idempotency key are written in ONE transaction, and replaying a decided approval returns the original receipt (`replayed: true`) — a double-click can never double-debit.
 - The mock core banking mirrors Co-opConnect shapes (message references, idempotency, statement/transfer services) with synthetic data; a thin adapter to their sandbox would slot in behind the same interface.
 - The reranker is a calibrated lexical proxy for a cross-encoder; the ranking contract (RRF fusion, answerability gate at 0.42) is identical to the production design.
 - The golden set ships 55 cases covering every intent × language × risk cell; the scaling path to ~300 is documented in the eval report.
 - No LLM-as-judge is used in the harness — all checks are programmatic, so there is no judge variance to calibrate. If a judge is introduced, the method note specifies hand-labelling ~50 items and reporting Cohen's κ.
+- Security scans in CI (semgrep, bandit, trivy, pip/bun audit) are **informational** for this demo; lint, typecheck, tests, the eval gate and the production build are the enforced gates.

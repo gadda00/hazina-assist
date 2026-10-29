@@ -12,12 +12,26 @@ import { signIntent, verifyIntent, checkTransferPolicy, DEFAULT_LIMITS } from "@
 import { gatewayChat } from "@/lib/gateway";
 import { appendEvent } from "@/lib/audit";
 import { coreTransfer } from "@/lib/banking";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
+import { toCents, parseAmountKes as normaliseAmount } from "@/lib/money";
+import { z } from "zod";
+
+export type DestinationType = "mpesa" | "internal" | "pesalink";
+
+const DestTypeSchema = z.enum(["mpesa", "internal", "pesalink"]);
+
+/** LLM gap-fill output must validate against this schema — never trusted raw. */
+const LlmExtractionSchema = z.object({
+  amount: z.number().finite().nonnegative().nullable().optional(),
+  destination_type: DestTypeSchema.nullable().optional(),
+  destination: z.string().min(3).max(120).nullable().optional(),
+  beneficiary_name: z.string().min(1).max(80).nullable().optional(),
+});
 
 export interface TransferProposal {
   fromAccountHandle: string | null;
   beneficiaryName: string | null;
-  destinationType: "mpesa" | "internal" | "pesalink" | null;
+  destinationType: DestinationType | null;
   destination: string | null;
   amountKes: number | null;
   purpose: string | null;
@@ -29,13 +43,14 @@ const MPESA_RE = /(\+?254[17]\d{8}|(?<!\d)0[17]\d{8}(?!\d))/;
 const PESALINK_RE = /(pesalink|other bank|equity|kcb|absa|dtb|stanbic|family bank)/i;
 const INTERNAL_RE = /(internal|same bank|co-?op|hazina|within the bank|kwenda hazina)/i;
 
-function parseAmountKes(text: string): number | null {
+function parseAmountFromText(text: string): number | null {
   const m = text.match(AMOUNT_RE);
   if (!m) return null;
   const v = parseFloat(m[1].replace(/,/g, ""));
   if (isNaN(v)) return null;
-  if ((m[2] || "").toLowerCase() === "k") return v * 1000; // "15k", "2k kwa Jane"
-  return v;
+  // "15k", "2k kwa Jane" — thousands suffix; all money goes through the
+  // cents normaliser so no float drift enters the pipeline.
+  return normaliseAmount((m[2] || "").toLowerCase() === "k" ? v * 1000 : v);
 }
 
 function normalizePhone(raw: string): string | null {
@@ -62,7 +77,7 @@ export async function proposeTransfer(
     purpose: null,
   };
 
-  proposal.amountKes = parseAmountKes(input);
+  proposal.amountKes = parseAmountFromText(input);
 
   const mpesa = input.match(MPESA_RE);
   if (mpesa) {
@@ -73,7 +88,6 @@ export async function proposeTransfer(
   } else if (INTERNAL_RE.test(input)) {
     proposal.destinationType = "internal";
   }
-
   // Beneficiary name heuristics: "to Jane", "kwa Jane", "send X to NAME on/at ..."
   const nameMatch =
     input.match(/\b(?:to|kwa|for|kwa ajili ya)\s+([A-Z][a-zA-Z'’-]{1,20}(?:\s+[A-Z][a-zA-Z'’-]{1,20})?)/) ??
@@ -110,13 +124,15 @@ export async function proposeTransfer(
       return name === mentioned || first === mentioned;
     });
     if (saved) {
-      proposal.destinationType = proposal.destinationType ?? saved.destinationType;
+      const savedType = DestTypeSchema.safeParse(saved.destinationType);
+      proposal.destinationType = proposal.destinationType ?? (savedType.success ? savedType.data : null);
       proposal.destination = proposal.destination ?? saved.destination;
       proposal.beneficiaryName = saved.name;
     }
   }
 
-  // LLM gap-fill for missing fields (constrained JSON)
+  // LLM gap-fill for missing fields (constrained JSON, schema-validated —
+  // an unexpected shape is discarded, never cast)
   const missing = !proposal.amountKes || !proposal.destinationType || !proposal.destination;
   let method: "rules" | "rules+llm" = "rules";
   if (missing) {
@@ -134,11 +150,14 @@ export async function proposeTransfer(
     );
     if (g.backend === "external") {
       try {
-        const j = JSON.parse(g.content.replace(/```json?|```/g, "").trim());
-        if (proposal.amountKes == null && typeof j.amount === "number") proposal.amountKes = j.amount;
+        const raw = JSON.parse(g.content.replace(/```json?|```/g, "").trim()) as unknown;
+        const j = LlmExtractionSchema.parse(raw); // unsafe shape → caught below
+        if (proposal.amountKes == null && j.amount != null) {
+          proposal.amountKes = normaliseAmount(j.amount);
+        }
         if (!proposal.destinationType && j.destination_type) proposal.destinationType = j.destination_type;
-        if (!proposal.destination && j.destination) proposal.destination = String(j.destination);
-        if (!proposal.beneficiaryName && j.beneficiary_name) proposal.beneficiaryName = String(j.beneficiary_name);
+        if (!proposal.destination && j.destination) proposal.destination = j.destination;
+        if (!proposal.beneficiaryName && j.beneficiary_name) proposal.beneficiaryName = j.beneficiary_name;
       } catch { /* keep rules-only result */ }
     }
   }
@@ -146,20 +165,34 @@ export async function proposeTransfer(
   return { proposal, method, policyNotes: [] };
 }
 
-/** Deterministic policy gate before any OTP / signing happens. */
-export async function policyGate(sessionId: string, p: TransferProposal) {
+/** Deterministic policy gate before any OTP / signing happens.
+ *  Discriminated result: consumers narrow via `allowed` — no unsafe casts. */
+export type PolicyGateResult =
+  | { allowed: false; reason: string; executedToday: number }
+  | {
+      allowed: true;
+      riskLevel: "low" | "medium";
+      notes: string[];
+      acct: { id: string; handle: string; maskedNumber: string };
+      beneficiary: { id: string; firstUsedAt: Date | null } | null;
+      executedToday: number;
+    };
+
+export async function policyGate(sessionId: string, p: TransferProposal): Promise<PolicyGateResult> {
   const sess = await db.chatSession.findUnique({ where: { id: sessionId }, include: { customer: true } });
-  if (!sess) return { allowed: false as const, reason: "no_session" };
+  if (!sess) return { allowed: false, reason: "no_session", executedToday: 0 };
 
   const acct = await db.account.findUnique({ where: { handle: p.fromAccountHandle ?? "" } });
-  if (!acct || acct.customerId !== sess.customerId) return { allowed: false as const, reason: "account_not_found" };
+  if (!acct || acct.customerId !== sess.customerId) {
+    return { allowed: false, reason: "account_not_found", executedToday: 0 };
+  }
 
-  // today's outbound total
+  // today's outbound total — summed in cents, no float drift
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const todays = await db.transaction.findMany({
     where: { accountId: acct.id, direction: "debit", type: "transfer_out", ts: { gte: startOfDay }, status: "completed" },
   });
-  const executedToday = todays.reduce((a, t) => a + t.amount, 0);
+  const executedToday = toCents(todays.reduce((a, t) => a + t.amount, 0)) / 100;
 
   // beneficiary state
   let beneficiary = null as { id: string; firstUsedAt: Date | null } | null;
@@ -185,17 +218,48 @@ export async function policyGate(sessionId: string, p: TransferProposal) {
     { amountKes: p.amountKes ?? 0, executedTodayKes: executedToday, beneficiaryAgeMinutes },
     DEFAULT_LIMITS
   );
-  return { allowed: decision.allowed as boolean, decision, acct, beneficiary, executedToday };
+  if (!decision.allowed) {
+    return { allowed: false, reason: decision.reason, executedToday };
+  }
+  return {
+    allowed: true,
+    riskLevel: decision.riskLevel,
+    notes: decision.notes,
+    acct: { id: acct.id, handle: acct.handle, maskedNumber: acct.maskedNumber },
+    beneficiary,
+    executedToday,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // OTP step-up (mock channel, outside the LLM context)
+//
+// Cryptographically random code, bound to the staged intent, single-active
+// (a new issuance consumes every earlier code), 5-minute expiry, 3-attempt
+// lockout. The code is only ever returned to the client when DEMO_MODE is
+// enabled (default on — this is a demo; set DEMO_MODE=false to hide it).
 // ---------------------------------------------------------------------------
 
+export const OTP_TTL_MS = 5 * 60_000;
+export const OTP_MAX_ATTEMPTS = 3;
+
+export function demoMode(): boolean {
+  // Demo-first default: the synthetic SMS card is the demo's OTP channel.
+  // DEMO_MODE=false hides the code (a real deployment would send SMS).
+  return process.env.DEMO_MODE !== "false";
+}
+
 export async function issueOtp(sessionId: string): Promise<{ code: string; expiresAt: Date }> {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 5 * 60_000);
-  await db.otpCode.create({ data: { sessionId, code, expiresAt } });
+  const code = String(randomInt(100_000, 1_000_000)); // crypto random, no Math.random
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+  // invalidate every earlier code for this session (single active OTP)
+  await db.otpCode.updateMany({
+    where: { sessionId, consumed: false },
+    data: { consumed: true },
+  });
+  // bind to the currently staged intent, if one exists yet
+  const staged = await db.pendingAction.findFirst({ where: { sessionId, kind: "intent_staged" } });
+  await db.otpCode.create({ data: { sessionId, code, expiresAt, stagedActionId: staged?.id ?? null } });
   await db.pendingAction.deleteMany({ where: { sessionId, kind: "otp_wait" } });
   await db.pendingAction.create({ data: { sessionId, kind: "otp_wait", payload: JSON.stringify({ issuedAt: Date.now() }) } });
   return { code, expiresAt };
@@ -209,8 +273,16 @@ export async function verifyOtp(sessionId: string, code: string): Promise<{ ok: 
     orderBy: { createdAt: "desc" },
   });
   if (!otp) return { ok: false, reason: "no_otp_pending" };
+  // binding: the code must match the intent staged NOW — a restaged transfer
+  // (new request after a failed/expired attempt) kills older codes
+  if (otp.stagedActionId) {
+    const staged = await db.pendingAction.findFirst({ where: { sessionId, kind: "intent_staged" } });
+    if (!staged || staged.id !== otp.stagedActionId) {
+      return { ok: false, reason: "otp_stale" };
+    }
+  }
   if (otp.expiresAt < new Date()) return { ok: false, reason: "otp_expired" };
-  if (otp.attempts >= 3) return { ok: false, reason: "otp_locked" };
+  if (otp.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "otp_locked" };
   if (otp.code !== code.trim()) {
     await db.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
     return { ok: false, reason: "otp_wrong" };
@@ -226,6 +298,21 @@ export async function verifyOtp(sessionId: string, code: string): Promise<{ ok: 
 
 const INTENT_SECRET = process.env.HAZINA_INTENT_SECRET ?? "dev-only-secret-rotate-me";
 
+/** Staged pending-action payload — schema-validated, never `as never`. */
+const StagedIntentSchema = z.object({
+  proposal: z.object({
+    fromAccountHandle: z.string().nullable(),
+    beneficiaryName: z.string().nullable(),
+    destinationType: DestTypeSchema.nullable(),
+    destination: z.string().nullable(),
+    amountKes: z.number().finite().nonnegative().nullable(),
+    purpose: z.string().nullable(),
+    riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  }),
+  acctId: z.string().min(1),
+});
+type StagedIntent = z.infer<typeof StagedIntentSchema>;
+
 /**
  * OTP step-up completion — called by the orchestrator BEFORE routing when a
  * 6-digit code arrives while an OTP is pending. Verifies the code, stages the
@@ -235,7 +322,10 @@ export async function completeOtpFlow(sessionId: string, code: string) {
   const pendingOtp = await db.pendingAction.findFirst({ where: { sessionId, kind: "otp_wait" } });
   if (!pendingOtp) return { handled: false as const };
   const staged = await db.pendingAction.findFirst({ where: { sessionId, kind: "intent_staged" } });
-  const p = staged ? (JSON.parse(staged.payload) as { proposal: Record<string, unknown>; acctId: string }) : null;
+  const parsedStage = staged
+    ? StagedIntentSchema.safeParse(JSON.parse(staged.payload) as unknown)
+    : null;
+  const p = parsedStage?.success ? parsedStage.data : null;
   const v = await verifyOtp(sessionId, code);
   if (!v.ok) {
     return {
@@ -245,9 +335,9 @@ export async function completeOtpFlow(sessionId: string, code: string) {
     };
   }
   if (!p) return { handled: true as const, ok: false as const, reason: "no_staged_intent" };
-  const intent = await stageSignedIntent(sessionId, p.proposal as never, p.acctId);
+  const intent = await stageSignedIntent(sessionId, p.proposal, p.acctId);
   await db.pendingAction.deleteMany({ where: { sessionId } });
-  const task = await createApprovalForIntent(intent.id, (p.proposal as { riskLevel?: string }).riskLevel ?? "low");
+  const task = await createApprovalForIntent(intent.id, p.proposal.riskLevel ?? "low");
   return {
     handled: true as const,
     ok: true as const,
@@ -326,11 +416,28 @@ export async function createApprovalForIntent(intentId: string, riskLevel: strin
   return task;
 }
 
-/** The EXECUTE node: verify signature, expiry, nonce — then idempotent core call. */
-export async function executeIntent(intentId: string, approver: string) {
+/** The EXECUTE node: verify signature, expiry, nonce — then idempotent core call.
+ *  Replaying an EXECUTED intent returns the original receipt (ok + replayed)
+ *  instead of an error — a double-clicked approval can never double-debit. */
+export async function executeIntent(
+  intentId: string,
+  approver: string
+): Promise<
+  | { ok: true; txnRef?: string; feeKes?: number; messageRef: string; replayed?: boolean }
+  | { ok: false; reason: string }
+> {
   const intent = await db.transferIntent.findUnique({ where: { id: intentId } });
   if (!intent) return { ok: false, reason: "intent_missing" };
-  if (intent.status === "executed") return { ok: false, reason: "already_executed" };
+  if (intent.status === "executed") {
+    // idempotent replay: original receipt, flagged as replayed
+    return {
+      ok: true,
+      txnRef: intent.executedTxnRef ?? undefined,
+      feeKes: intent.executedFeeKes ?? undefined,
+      messageRef: intent.idempotencyKey ?? `MSG-${intent.nonce.toUpperCase()}`,
+      replayed: true,
+    };
+  }
 
   const signed = { body: JSON.parse(intent.signedBody) as { sid: string; intent: Record<string, unknown>; exp: number; nonce: string }, sig: intent.sig };
   const v = await verifyIntent(INTENT_SECRET, signed, intent.sessionId, {
@@ -342,7 +449,7 @@ export async function executeIntent(intentId: string, approver: string) {
   if (!v.ok) {
     await db.transferIntent.update({ where: { id: intentId }, data: { status: "expired" } });
     await appendEvent({ sessionId: intent.sessionId, actor: `approver:${approver}`, eventType: "execute_rejected", payload: { intentId, reason: v.reason } });
-    return { ok: false, reason: v.reason };
+    return { ok: false, reason: v.reason ?? "verification_failed" };
   }
 
   const idempotencyKey = `MSG-${intent.nonce.toUpperCase()}`;
@@ -359,7 +466,7 @@ export async function executeIntent(intentId: string, approver: string) {
   if (res.status === "success" || res.status === "duplicate") {
     await db.transferIntent.update({
       where: { id: intentId },
-      data: { status: "executed", executedTxnRef: res.data?.txnRef, idempotencyKey },
+      data: { status: "executed", executedTxnRef: res.data?.txnRef, executedFeeKes: res.data?.feeKes, idempotencyKey },
     });
     // record first use of beneficiary
     const sess = await db.chatSession.findUnique({ where: { id: intent.sessionId } });

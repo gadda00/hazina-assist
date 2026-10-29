@@ -2,13 +2,22 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { SAMPLE_PAYSLIPS, buildPayslipPack } from "@/lib/idp";
 import { appendEvent } from "@/lib/audit";
+import { requireCustomerSession, assertSessionOwnsCustomer } from "@/lib/authz";
+import { ERR, IdpPostSchema, SessionQuerySchema, parseBody, parseQuery, reqId } from "@/lib/schemas";
 
-/** GET /api/idp — payslip samples + previously built packs for this session. */
+/** GET /api/idp — payslip samples + previously built packs for this session
+ *  (own session only — cross-customer reads are rejected). */
 export async function GET(req: Request) {
-  const sessionId = new URL(req.url).searchParams.get("sessionId");
-  const packs = sessionId
-    ? await db.payslipPack.findMany({ where: { sessionId }, orderBy: { createdAt: "desc" } })
-    : [];
+  const auth = await requireCustomerSession(req);
+  if (!auth.ok) return auth.response;
+
+  const parsed = parseQuery(req, SessionQuerySchema);
+  if (!parsed.ok) return parsed.response;
+  const owns = assertSessionOwnsCustomer(auth.data, parsed.data.sessionId);
+  if (!owns.ok) return owns.response;
+  const sessionId = parsed.data.sessionId;
+
+  const packs = await db.payslipPack.findMany({ where: { sessionId }, orderBy: { createdAt: "desc" } });
   return NextResponse.json({
     samples: SAMPLE_PAYSLIPS,
     packs: packs.map((p) => ({
@@ -31,23 +40,25 @@ export async function GET(req: Request) {
  * (DPA 2019 s.35).
  */
 export async function POST(req: Request) {
+  const auth = await requireCustomerSession(req);
+  if (!auth.ok) return auth.response;
+
+  const parsed = await parseBody(req, IdpPostSchema);
+  if (!parsed.ok) return parsed.response;
+  const { sessionId, sampleKey, text, requestedAmountKes, tenorMonths } = parsed.data;
+
+  const owns = assertSessionOwnsCustomer(auth.data, sessionId);
+  if (!owns.ok) return owns.response;
+
   try {
-    const { sessionId, sampleKey, text, requestedAmountKes, tenorMonths } = (await req.json()) as {
-      sessionId?: string;
-      sampleKey?: string;
-      text?: string;
-      requestedAmountKes?: number;
-      tenorMonths?: number;
-    };
-    if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     const sess = await db.chatSession.findUnique({ where: { id: sessionId } });
-    if (!sess) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
+    if (!sess) return ERR.notFound("Session", reqId(req));
 
     const source = sampleKey
       ? SAMPLE_PAYSLIPS.find((s) => s.key === sampleKey)
       : { key: "user_upload", label: "upload.txt", text: text ?? "" };
     if (!source || !source.text.trim()) {
-      return NextResponse.json({ error: "no_payslip_text" }, { status: 400 });
+      return ERR.validation("no readable payslip text was provided (empty upload?)", reqId(req));
     }
 
     const result = await buildPayslipPack({
@@ -117,6 +128,6 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error("[idp]", e);
-    return NextResponse.json({ error: "idp_processing_failed" }, { status: 500 });
+    return ERR.internal(reqId(req));
   }
 }

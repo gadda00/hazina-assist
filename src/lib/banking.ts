@@ -8,6 +8,7 @@
  */
 import { db } from "@/lib/db";
 import { randomUUID } from "node:crypto";
+import { addKes, gteKes, toCents } from "@/lib/money";
 
 export interface CoreResult<T> {
   messageReference: string;
@@ -38,7 +39,7 @@ export async function coreGetBalance(accountId: string): Promise<CoreResult<{ ba
 export async function coreMiniStatement(
   accountId: string,
   count: number
-): Promise<CoreResult<{ transactions: Array<{ txnRef: string; ts: string; narrative: string; amount: number; direction: string; channel?: string | null; category?: string | null; runningCategory?: string }> }>> {
+): Promise<CoreResult<{ transactions: Array<{ txnRef: string; ts: string; narrative: string; amount: number; direction: string; channel?: string | null; category?: string | null; runningCategory?: string | null }> }>> {
   const txns = await db.transaction.findMany({
     where: { accountId },
     orderBy: { ts: "desc" },
@@ -92,8 +93,10 @@ export async function coreTransfer(instr: TransferInstruction): Promise<CoreResu
 
   const fee = await computeFee(instr.destinationType === "internal" ? "internal_transfer" : instr.destinationType === "mpesa" ? "send_to_mpesa" : "pesalink_out", instr.amountKes);
   const feeKes = fee.feeKes;
+  // integer-cents arithmetic: amount + fee and the funds check never drift
+  const totalDebit = addKes(instr.amountKes, feeKes);
 
-  if (acct.balanceKes < instr.amountKes + feeKes) {
+  if (!gteKes(acct.balanceKes, totalDebit)) {
     const res: CoreResult<{ txnRef: string; feeKes: number }> = {
       messageReference: instr.idempotencyKey,
       status: "failed",
@@ -109,7 +112,7 @@ export async function coreTransfer(instr: TransferInstruction): Promise<CoreResu
   await db.$transaction(async (tx) => {
     await tx.account.update({
       where: { id: instr.fromAccountId },
-      data: { balanceKes: { decrement: instr.amountKes + feeKes } },
+      data: { balanceKes: { decrement: toCents(totalDebit) / 100 } },
     });
     await tx.transaction.create({
       data: {
@@ -141,17 +144,26 @@ export async function coreTransfer(instr: TransferInstruction): Promise<CoreResu
         },
       });
     }
+    // The idempotency record is written in the SAME transaction as the debit:
+    // a crash between debit and key-store can no longer allow a double debit
+    // on replay.
+    const res: CoreResult<{ txnRef: string; feeKes: number }> = {
+      messageReference: instr.idempotencyKey,
+      status: "success",
+      responseCode: "0",
+      responseDescription: "Success",
+      data: { txnRef, feeKes },
+    };
+    await tx.idempotencyKey.create({ data: { key: instr.idempotencyKey, response: JSON.stringify(res) } });
   });
 
-  const res: CoreResult<{ txnRef: string; feeKes: number }> = {
+  return {
     messageReference: instr.idempotencyKey,
     status: "success",
     responseCode: "0",
     responseDescription: "Success",
     data: { txnRef, feeKes },
   };
-  await db.idempotencyKey.create({ data: { key: instr.idempotencyKey, response: JSON.stringify(res) } });
-  return res;
 }
 
 export async function coreTransactionStatus(txnRef: string): Promise<CoreResult<{ txnRef: string; status: string }>> {

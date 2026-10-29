@@ -11,6 +11,7 @@ import {
   Send, ShieldAlert, ShieldCheck, Sparkles, User, Wrench, KeyRound, FileUp, Activity,
 } from "lucide-react";
 import type { ChatMessage, ChatResult, SessionInfo } from "@/lib/types";
+import { apiFetch } from "@/lib/client-api";
 
 const QUICK_PROMPTS: { label: string; text: string; tag?: string }[] = [
   { label: "M-Pesa fee (Sheng)", text: "nikituma 15k kwa mpesa kutoka coop, charges ni how much?" },
@@ -42,7 +43,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
   }, []);
 
   useEffect(() => {
-    fetch(`/api/chat?sessionId=${session.session.id}`)
+    apiFetch(`/api/chat?sessionId=${session.session.id}`)
       .then((r) => r.json())
       .then((d) => setMessages((d.messages ?? []) as Msg[]))
       .catch(() => void 0);
@@ -61,13 +62,13 @@ export function ChatView({ session }: { session: SessionInfo }) {
         { id: `u-${Date.now()}`, role: "user", content, createdAt: new Date().toISOString() },
       ]);
       try {
-        const res = await fetch("/api/chat", {
+        const res = await apiFetch("/api/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sessionId: session.session.id, message: content }),
         });
-        const d = (await res.json()) as ChatResult & { error?: string };
-        if (!res.ok) throw new Error(d.error ?? "chat failed");
+        const d = (await res.json()) as ChatResult & { error?: { message?: string } | string };
+        if (!res.ok) throw new Error(typeof d.error === "string" ? d.error : d.error?.message ?? "chat failed");
         setOtpDev(d.otp?.devCode ?? null);
         setMessages((m) => [
           ...m,
@@ -104,18 +105,18 @@ export function ChatView({ session }: { session: SessionInfo }) {
     async (sampleKey: "clean" | "scanned") => {
       setBusy(true);
       try {
-        const res = await fetch("/api/idp", {
+        const res = await apiFetch("/api/idp", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sessionId: session.session.id, sampleKey, requestedAmountKes: 300000, tenorMonths: 24 }),
         });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error);
+        if (!res.ok) throw new Error(d.error?.message ?? d.error);
         toast({
           title: "Payslip processed",
           description: `Validation ${d.validation.ok ? "passed" : "flagged"} · pack awaiting a credit officer`,
         });
-        const h = await fetch(`/api/chat?sessionId=${session.session.id}`).then((r) => r.json());
+        const h = await apiFetch(`/api/chat?sessionId=${session.session.id}`).then((r) => r.json());
         setMessages((h.messages ?? []) as Msg[]);
       } catch {
         toast({ title: "IDP processing failed", variant: "destructive" });

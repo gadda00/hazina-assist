@@ -1,22 +1,41 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, dbDiagnostics } from "@/lib/db";
 import { listTools } from "@/lib/tools";
 import { breakerState } from "@/lib/gateway";
 import { availableLabels } from "@/lib/categoriser";
+import { demoMode } from "@/lib/transfer";
 
-/** GET /api/health — liveness + dependency snapshot (used by the monitoring tab). */
+/**
+ * GET /api/health — liveness + dependency snapshot (used by the monitoring
+ * tab). NEVER throws: if the database is unreachable the endpoint reports a
+ * degraded status plus safe diagnostics (paths searched, init error class)
+ * instead of an anonymous 500 — a broken deployment becomes debuggable from
+ * the outside.
+ */
 export async function GET() {
-  const auditCount = await db.auditEvent.count();
+  let database: { ok: boolean; auditEvents: number; error?: string } = { ok: false, auditEvents: 0 };
+  try {
+    const auditCount = await db.auditEvent.count();
+    database = { ok: true, auditEvents: auditCount };
+  } catch (e) {
+    database = {
+      ok: false,
+      auditEvents: 0,
+      error: e instanceof Error ? `${e.name}: ${e.message.slice(0, 200)}` : String(e).slice(0, 200),
+    };
+  }
+
   return NextResponse.json({
-    status: "ok",
+    status: database.ok ? "ok" : "degraded",
     service: "hazina-assist",
-    version: "0.1.0",
+    version: "0.2.0",
     dependencies: {
-      database: "ok",
+      database,
       modelGateway: breakerState().open ? "circuit_open (fallback active)" : "ok",
       categoriser: process.env.CATEGORISER_URL ? "configured" : "local-fallback",
+      demoMode: demoMode() ? "on (OTP code visible in UI)" : "off",
     },
-    counts: { auditEvents: auditCount },
+    ...(database.ok ? {} : { diagnostics: dbDiagnostics }),
     time: new Date().toISOString(),
   });
 }

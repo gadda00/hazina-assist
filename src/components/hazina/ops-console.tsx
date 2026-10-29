@@ -14,6 +14,7 @@ import {
 import type {
   ApprovalTask, AuditEventView, EvalRunView, PayslipPackView, SessionInfo,
 } from "@/lib/types";
+import { apiFetch } from "@/lib/client-api";
 
 type ConsoleTab = "approvals" | "packs" | "audit" | "evals" | "monitor";
 
@@ -81,7 +82,7 @@ function ApprovalsTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await fetch("/api/approvals").then((r) => r.json());
+      const d = await apiFetch("/api/approvals").then((r) => r.json());
       setTasks(d.tasks ?? []);
       setPacks(d.packs ?? []);
     } finally {
@@ -95,20 +96,32 @@ function ApprovalsTab() {
 
   const decide = useCallback(
     async (taskId: string, decision: "approve" | "reject") => {
+      let reason: string | undefined;
+      if (decision === "reject") {
+        // required rejection reason — recorded on the task + audit chain
+        reason = window.prompt("Rejection reason (required — recorded on the audit chain):") ?? "";
+        if (!reason.trim()) {
+          toast({ title: "Rejection reason required", description: "The audit chain records WHY a task was declined.", variant: "destructive" });
+          return;
+        }
+        reason = reason.trim();
+      }
       setActing(taskId + decision);
       try {
-        const res = await fetch("/api/approvals", {
+        const res = await apiFetch("/api/approvals", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ taskId, decision, officer }),
+          body: JSON.stringify({ taskId, decision, officer, reason }),
         });
         const d = await res.json();
         if (d.ok) {
           toast({
             title: decision === "approve" ? "Transfer executed" : "Transfer rejected",
-            description: d.txnRef
-              ? `txn ${d.txnRef} · fee KES ${d.feeKes} · idempotency ${d.messageRef?.slice(0, 12)}…`
-              : "The customer is notified; the audit chain records your decision.",
+            description: d.replayed
+              ? "Idempotent replay — original receipt returned, nothing double-debited."
+              : d.txnRef
+                ? `txn ${d.txnRef} · fee KES ${d.feeKes} · idempotency ${d.messageRef?.slice(0, 12)}…`
+                : "The customer is notified; the audit chain records your decision.",
           });
         } else {
           toast({ title: "Execution rejected by controls", description: `reason: ${d.reason}`, variant: "destructive" });
@@ -160,7 +173,19 @@ function ApprovalsTab() {
       )}
 
       {open.map((t) => {
-        const p = t.payload;
+        const p = t.payload as {
+          customer?: string;
+          fromAccount?: string;
+          beneficiary?: string;
+          destination?: string;
+          destinationType?: string;
+          purpose?: string;
+          amountKes?: number;
+          requestedAmountKes?: number;
+          fileName?: string;
+          netKes?: number;
+          validationOk?: boolean;
+        };
         return (
           <Card key={t.id} className="border-slate-200">
             <CardContent className="p-4 space-y-3">
@@ -269,7 +294,7 @@ function PacksTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await fetch("/api/approvals").then((r) => r.json());
+      const d = await apiFetch("/api/approvals").then((r) => r.json());
       setPacks(d.packs ?? []);
     } finally {
       setLoading(false);
@@ -283,13 +308,13 @@ function PacksTab() {
   const decidePack = useCallback(
     async (packId: string, decision: "approve" | "reject") => {
       // find the approval task tied to this pack
-      const d = await fetch("/api/approvals").then((r) => r.json());
+      const d = await apiFetch("/api/approvals").then((r) => r.json());
       const task = (d.tasks as ApprovalTask[]).find((t) => t.type === "loan_pack" && t.refId === packId && t.status === "open");
       if (!task) {
         toast({ title: "No open task for this pack", variant: "destructive" });
         return;
       }
-      await fetch("/api/approvals", {
+      await apiFetch("/api/approvals", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ taskId: task.id, decision, officer: "Officer Njeri (Credit)" }),
@@ -458,7 +483,7 @@ function AuditTab({ sessionId }: { sessionId: string }) {
     setLoading(true);
     try {
       const url = `/api/audit?limit=150${filterSession ? `&sessionId=${sessionId}` : ""}`;
-      const d = await fetch(url).then((r) => r.json());
+      const d = await apiFetch(url).then((r) => r.json());
       setEvents(d.events ?? []);
       setVerification(d.verification ?? null);
     } finally {
@@ -553,7 +578,7 @@ function EvalsTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/eval")
+    apiFetch("/api/eval")
       .then((r) => r.json())
       .then((d) => setRun(d.run))
       .finally(() => setLoading(false));
@@ -700,8 +725,8 @@ function MonitorTab() {
     setLoading(true);
     try {
       const [m, h] = await Promise.all([
-        fetch("/api/metrics").then((r) => r.text()),
-        fetch("/api/health").then((r) => r.json()),
+        apiFetch("/api/metrics").then((r) => r.text()),
+        apiFetch("/api/health").then((r) => r.json()),
       ]);
       const parsed: Record<string, string> = {};
       for (const line of m.split("\n")) {

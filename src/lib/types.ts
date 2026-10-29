@@ -1,8 +1,8 @@
 /** Shared client-side types mirroring the API contracts. */
 
 export interface SessionInfo {
-  session: { id: string; createdAt: string };
-  customer: { id: string; name: string; phone: string };
+  session: { id: string; token: string; role: "customer" | "officer"; createdAt: string };
+  customer: { id: string; name: string; phone?: string; role?: string };
   accounts: { handle: string; maskedNumber: string; type: string; currency: string }[];
   beneficiaries: { name: string; destinationType: string; masked: string; established: boolean }[];
 }

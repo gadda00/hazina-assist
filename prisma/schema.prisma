@@ -4,6 +4,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // native (build machine) + Vercel's lambda platform (Amazon Linux, glibc,
+  // OpenSSL 3) — without the explicit target the engine binary can be absent
+  // from the serverless bundle and every DB call 500s at runtime.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -78,7 +82,13 @@ model ChatSession {
   id        String   @id @default(cuid())
   customerId String
   customer  Customer @relation(fields: [customerId], references: [id])
-  status    String   @default("active")
+  status    String   @default("active") // active | closed
+  // Demo auth: sessions are server-side records. Login mints a random bearer
+  // token; only its SHA-256 hash is stored. role separates the customer app
+  // from the officer console (checked on EVERY endpoint, server-side).
+  role      String   @default("customer") // customer | officer
+  tokenHash String?  @unique
+  revokedAt DateTime?
   createdAt DateTime @default(now())
   messages  Message[]
   auditEvents AuditEvent[]
@@ -130,6 +140,7 @@ model TransferIntent {
   exp             Int // unix seconds
   status          String   @default("staged") // staged | otp_verified | pending_approval | executed | rejected | expired
   executedTxnRef  String?
+  executedFeeKes  Float?
   idempotencyKey  String?
   createdAt       DateTime @default(now())
 }
@@ -155,6 +166,9 @@ model OtpCode {
   session   ChatSession @relation(fields: [sessionId], references: [id])
   code      String
   purpose   String   @default("step_up_transfer")
+  // Binding: the OTP only verifies the staged intent it was issued for — a
+  // second transfer request invalidates earlier codes (see transfer.ts).
+  stagedActionId String?
   consumed  Boolean  @default(false)
   attempts  Int      @default(0)
   expiresAt DateTime

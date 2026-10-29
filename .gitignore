@@ -47,3 +47,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 tsconfig.tsbuildinfo
+
+# sandbox scaffolding (not part of Hazina Assist)
+skills/
+firstlight/
+examples/
+scripts/verify-*.png
