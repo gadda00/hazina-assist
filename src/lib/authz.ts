@@ -40,14 +40,40 @@ export function mintToken(): string {
   return randomBytes(24).toString("base64url"); // 192-bit, URL-safe
 }
 
-/** Create a session row + its bearer token. */
-export async function createDemoSession(customerId: string, as: "customer" | "officer") {
+/** Create a session row + its bearer token.
+ *
+ * `reuseActive: true` (demo login): if this customer already has a live
+ * session of the same role, RESUME it with a freshly minted token instead of
+ * forking a new one — the curated demo history (warm chat, staged transfers,
+ * receipts) is what the presenter sees right after login, and the audit chain
+ * stays continuous per customer journey. Tests use the default fork behaviour.
+ */
+export async function createDemoSession(
+  customerId: string,
+  as: "customer" | "officer",
+  opts?: { reuseActive?: boolean }
+) {
   const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer) return { ok: false as const, code: "customer_not_found" };
   if (as === "officer" && !OFFICER_ROLES.has(customer.role)) {
     return { ok: false as const, code: "not_an_officer" };
   }
   const token = mintToken();
+
+  if (opts?.reuseActive) {
+    const existing = await db.chatSession.findFirst({
+      where: { customerId, role: as, revokedAt: null, status: "active" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existing) {
+      const session = await db.chatSession.update({
+        where: { id: existing.id },
+        data: { tokenHash: hashToken(token) },
+      });
+      return { ok: true as const, session, token, customer };
+    }
+  }
+
   const session = await db.chatSession.create({
     data: {
       customerId,

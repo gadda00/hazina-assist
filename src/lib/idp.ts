@@ -24,6 +24,7 @@ export interface SyntheticPayslipInput {
   gross: number;
   month: string; // "October 2026"
   scanned?: boolean; // inject OCR-ish noise
+  netOverride?: number; // TAMPERED net (validation must catch it)
 }
 
 export function generatePayslipText(i: SyntheticPayslipInput): string {
@@ -54,6 +55,13 @@ export function generatePayslipText(i: SyntheticPayslipInput): string {
     `NET PAY:  KES ${net.toLocaleString()}.00`,
   ];
   let text = lines.join("\n");
+  if (i.netOverride != null) {
+    // tampered NET PAY line: printed take-home disagrees with gross − deductions
+    text = text.replace(
+      /NET PAY:\s+KES [\d,.]+\.00/,
+      `NET PAY:  KES ${i.netOverride.toLocaleString()}.00`
+    );
+  }
   if (i.scanned) {
     // simulate OCR degradation: dropped characters, stray spaces, one swapped digit
     text = text
@@ -87,6 +95,19 @@ export const SAMPLE_PAYSLIPS = [
       gross: 82_500,
       month: "September 2026",
       scanned: true,
+    }),
+  },
+  {
+    key: "flagged",
+    label: "Sample C — tampered NET PAY (validation fails)",
+    text: generatePayslipText({
+      employer: "Mwangaza Farms Ltd",
+      employeeName: "Grace Wanjala",
+      kraPin: "P222333444L",
+      gross: 64_000,
+      month: "October 2026",
+      // honest net ≈ 42,920; printed 78,000 exceeds GROSS — two rules fail
+      netOverride: 78_000,
     }),
   },
 ];
@@ -228,7 +249,7 @@ export function validatePayslip(p: ExtractedPayslip): { rules: RuleResult[]; ok:
 export interface PackInput {
   sessionId: string;
   fileName: string;
-  docKind: "clean" | "scanned" | "user_upload";
+  docKind: "clean" | "scanned" | "user_upload" | "tampered";
   text: string;
   requestedAmountKes: number;
   tenorMonths: number;
@@ -281,4 +302,104 @@ export async function buildPayslipPack(i: PackInput) {
     },
   });
   return { pack, extracted, validation, affordability, summary };
+}
+
+// ---------------------------------------------------------------------------
+// 6. Full sample pipeline: pack + HITL task + customer message + audit event.
+//    Shared by POST /api/idp and the runtime auto-heal curator so both paths
+//    produce byte-identical demo state.
+// ---------------------------------------------------------------------------
+
+export interface ProcessedSample {
+  ok: true;
+  taskId: string;
+  packId: string;
+  fileName: string;
+  docKind: string;
+  extracted: ExtractedPayslip;
+  validation: { rules: RuleResult[]; ok: boolean };
+  affordability: ReturnType<typeof computeAffordability>;
+  summary: string;
+}
+
+export async function processPayslipSample(i: {
+  sessionId: string;
+  sampleKey: string;
+  requestedAmountKes: number;
+  tenorMonths: number;
+}): Promise<ProcessedSample> {
+  const source = SAMPLE_PAYSLIPS.find((s) => s.key === i.sampleKey);
+  if (!source || !source.text.trim()) {
+    throw new Error(`no readable payslip text for sample "${i.sampleKey}"`);
+  }
+  const sess = await db.chatSession.findUnique({ where: { id: i.sessionId }, include: { customer: true } });
+  if (!sess) throw new Error("session not found");
+
+  const docKind = i.sampleKey === "scanned" ? "scanned" : i.sampleKey === "flagged" ? "tampered" : "clean";
+  const result = await buildPayslipPack({
+    sessionId: i.sessionId,
+    fileName: source.label,
+    docKind,
+    text: source.text,
+    requestedAmountKes: i.requestedAmountKes,
+    tenorMonths: i.tenorMonths,
+  });
+
+  const task = await db.approvalTask.create({
+    data: {
+      sessionId: i.sessionId,
+      type: "loan_pack",
+      refId: result.pack.id,
+      riskLevel: result.validation.ok ? "medium" : "high",
+      payload: JSON.stringify({
+        packId: result.pack.id,
+        customer: sess.customer.name,
+        fileName: source.label,
+        netKes: result.extracted.net.value,
+        validationOk: result.validation.ok,
+        recommendation: result.affordability.recommendation,
+        requestedAmountKes: i.requestedAmountKes,
+        tenorMonths: i.tenorMonths,
+      }),
+    },
+  });
+
+  await db.message.create({
+    data: {
+      sessionId: i.sessionId,
+      role: "assistant",
+      content:
+        `Payslip processed (${source.label}). Net pay KES ${(result.extracted.net.value ?? 0).toLocaleString()}, ` +
+        `validation ${result.validation.ok ? "passed" : "flagged (" + result.validation.rules.filter((r) => !r.passed).map((r) => r.rule).join(", ") + ")"}. ` +
+        `I've prepared a recommendation pack for a credit officer — they make the final call. Status: AWAITING REVIEW (task ${task.id.slice(-6)}).`,
+      trace: JSON.stringify({
+        route: "idp",
+        kind: "idp_pack_created",
+        hitl: { taskId: task.id, riskLevel: task.riskLevel },
+        avgConfidence:
+          Math.round(
+            ([result.extracted.employer, result.extracted.employeeName, result.extracted.kraPin, result.extracted.gross, result.extracted.net].reduce((a, f) => a + f.confidence, 0) / 5) * 100
+          ) / 100,
+      }),
+    },
+  });
+
+  await appendEvent({
+    sessionId: i.sessionId,
+    actor: `customer:${sess.customerId}`,
+    eventType: "idp_uploaded",
+    payload: { fileName: source.label, docKind },
+  });
+
+  return {
+    ok: true as const,
+    taskId: task.id,
+    packId: result.pack.id,
+    fileName: source.label,
+    docKind,
+    extracted: result.extracted,
+    validation: result.validation,
+    affordability: result.affordability,
+    summary: result.summary,
+  };
 }

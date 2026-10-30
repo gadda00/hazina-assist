@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { appendEvent } from "@/lib/audit";
 import { createDemoSession, revokeSessionByToken, tokenFromRequest } from "@/lib/authz";
 import { deploymentMode } from "@/lib/deployment";
+import { demoState, ensureSeeded } from "@/lib/ensure-seed";
 import { ERR, LoginSchema, parseBody, reqId } from "@/lib/schemas";
 
 /**
@@ -43,7 +44,10 @@ export async function POST(req: Request) {
   const { customerId, as } = parsed.data;
 
   try {
-    const result = await createDemoSession(customerId, as);
+    // Demo login RESUMES the customer's live session when one exists, so the
+    // curated history (warm chat, staged transfers, receipts) is visible
+    // immediately after sign-in and the audit chain stays continuous.
+    const result = await createDemoSession(customerId, as, { reuseActive: true });
     if (!result.ok) {
       if (result.code === "not_an_officer") {
         return ERR.forbidden(reqId(req));
@@ -100,11 +104,18 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
+  // Auto-heal (see src/lib/ensure-seed.ts): a re-provisioned demo DB with
+  // schema but zero rows would render this directory — and every screen
+  // after it — blank. The first call rebuilds reference data (awaited) and
+  // kicks off showcase curation in the background; `demoState` lets the
+  // login screen poll until the demo is fully staged.
+  await ensureSeeded();
   const [customers, officers] = await Promise.all([
     db.customer.findMany({ where: { role: "customer" }, include: { accounts: true } }),
     db.customer.findMany({ where: { role: { in: ["credit_officer", "approver"] } } }),
   ]);
   return NextResponse.json({
+    demoState: demoState(),
     customers: customers.map((c) => ({
       id: c.id,
       name: c.name,

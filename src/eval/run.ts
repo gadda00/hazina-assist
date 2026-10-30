@@ -35,7 +35,9 @@ async function ensureEvalFixture() {
   let customer = await db.customer.findUnique({ where: { phone: "+254799000001" } });
   if (!customer) {
     customer = await db.customer.create({
-      data: { name: "Eval Fixture", phone: "+254799000001", role: "customer" },
+      // role "fixture" keeps the eval row out of the demo login directory
+      // (RBAC checks the SESSION role, not this column)
+      data: { name: "Eval Fixture", phone: "+254799000001", role: "fixture" },
     });
   }
   const a1 = await db.account.upsert({

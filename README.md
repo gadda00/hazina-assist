@@ -92,11 +92,10 @@ cp .env.example .env          # then set the ABSOLUTE sqlite path inside
 
 bun install
 bun run db:push          # create SQLite schema (non-destructive; force variant exists for resets)
-bun run seed             # synthetic customers, accounts, tariff guide, KB
-bun run dev              # http://localhost:3000
+bun run dev              # http://localhost:3000  (seed + showcase auto-heal on first load)
 
 # quality gates
-bun test                 # 75 unit + contract + safety + race tests
+bun test                 # 86 unit + contract + safety + race tests
 bun run eval             # deterministic golden-set gate → docs/eval/eval-report.md
 bun run lint
 bun run typecheck        # tsc --noEmit — a HARD gate, zero known errors
@@ -107,20 +106,27 @@ uvicorn main:app --port 8001
 # then: CATEGORISER_URL=http://localhost:8001 bun run dev
 ```
 
-> If the login screen says **“Demo directory is empty”**, the database was
-> re-provisioned without seed data — run `bun run seed` and reload.
+> **The demo self-heals.** If the database is re-provisioned empty (schema, no
+> rows), the first `GET /api/auth/login` detects it and rebuilds everything
+> server-side (`src/lib/ensure-seed.ts`): reference data first, then a curated
+> showcase — warm chat histories, an OTP-verified transfer pending approval,
+> a PesaLink journey, a tampered payslip, executed + rejected decision history
+> — all produced through the SAME orchestrator/IDP/approval code paths a real
+> click takes. The login screen shows a “preparing the demo database” note
+> while it stages. `bun run seed` remains available for manual control.
 
-Demo login: pick **Amina Wanjiru** (established beneficiary Jane → transfers flow to OTP + approval) or **Brian Otieno** — or the clearly-labelled **Demo officer console** entry (Officer Njeri) for the HITL side. Customers and officers get separate server-side sessions; the role split is enforced on every endpoint, not just in the UI. New: a third entry — **Guided tour** — walks a first-time visitor through the whole control journey in 8 steps (tariff question → citation → safe refusal → transfer → OTP → officer approval → audit verification), with each step stating what it shows *and what it does not prove*.
+Demo login: five synthetic customer profiles — **Amina Wanjiru** (salary earner; established beneficiary Jane → transfers flow to OTP + approval), **Brian Otieno** (family remittances; has an executed-transfer receipt in history), **Kevin Mutua** (sole proprietor; PesaLink supplier journey, KES 412k balance), **Zawadi Hassan** (young saver; rejected-transfer notice from officer review) and **Grace Wanjala** (near-empty account; tampered-payslip pack) — or the clearly-labelled **Demo officer console** entries (Officer Njeri — Credit; Officer Kamau — Payments) for the HITL side. Signing in RESUMES each customer's live session, so the curated history is visible immediately. The role split is enforced on every endpoint, not just in the UI. The **Guided tour** walks a first-time visitor through the whole control journey in 8 steps (tariff question → citation → safe refusal → transfer → OTP → officer approval → audit verification) with Back/Next navigation — you can never get stuck — and each step states what it shows *and what it does not prove*.
 
 ### 3-minute demo script
 
 Screenshots of every step live in `docs/screenshots/`.
 
-1. **Fee determinism + citations** — chat: *"nikituma 15k kwa mpesa kutoka coop, charges ni how much?"* → computed fee (KES 23), tariff citation with effective date, `compute_fee` tool call visible in the trace panel. *(fee-answer.png)*
+1. **Fee determinism + citations** — chat: *"nikituma 15k kwa mpesa kutoka coop, charges ni how much?"* → computed fee (KES 23), tariff citation with effective date (click any citation to expand its source excerpt), `compute_fee` tool call visible in the trace panel, and the **My accounts** rail showing live balances + beneficiaries (new-payee cooling-off badges). *(chat-fee.png, chat-accounts.png)*
 2. **Guardrails** — quick prompt *"Injection probe"* → refused at `guard_in` (score, signals); the audit chain records the refusal. Then *"Out of scope"* (weather) → answerability gate → handoff, never a guess.
-3. **Transfer end-to-end** — *"Send 2000 to Jane on M-Pesa 0733445566"* → OTP card (code shown only in DEMO_MODE, default on) → enter code → pending approval → sign out → **Demo officer console** entry → **Approval queue** → approve → txn reference + fee returned; the customer transcript gets the completion receipt; audit tab shows `intent_signed → hitl_raised → transfer_executed`, chain verified green. Double-clicking approve replays the ORIGINAL receipt — never a second debit. *(console-approvals.png, console-approved.png, console-audit.png)*
-4. **IDP** — *"I want to apply for a loan"* → payslip samples (clean/scanned) → extraction with confidence bars + evidence spans → validation rules → affordability computation → **Loan packs** tab → officer decides. *(console-loanpack.png)*
-5. **Evals** — Ops console → Evaluations: last golden-set run, per-language (EN/SW/Sheng) breakdown, CI gate status. *(console-evals.png)*
+3. **Transfer end-to-end** — *"Send 2000 to Jane on M-Pesa 0733445566"* → fee disclosed BEFORE confirmation → OTP card (code shown only in DEMO_MODE, default on) → enter code → pending approval → sign out → **Demo officer console** entry → **Approval queue** (stat chips: transfers / loan packs / high-risk / executed / rejected; curated open tasks for Amina, Kevin's PesaLink send and Grace's flagged pack, plus decided history) → approve → txn reference + fee returned; the customer transcript gets the completion receipt; audit tab shows `intent_signed → hitl_raised → transfer_executed`, chain verified green. Double-clicking approve replays the ORIGINAL receipt — never a second debit. *(console-approvals.png, verify-audit.png)*
+4. **IDP** — *"I want to apply for a loan"* → three payslip samples under the input box: **clean digital**, **scanned (OCR noise)** and **tampered** (NET PAY exceeds gross — `net_le_gross` and `deductions_reconcile` fail deterministically) → extraction with confidence bars + evidence spans → validation rules → affordability computation → **Loan packs** tab → officer decides. *(console-loanpack.png)*
+5. **Evals + monitoring** — Ops console → Evaluations: last golden-set run, per-language (EN/SW/Sheng) breakdown, CI gate status; Monitoring: liveness, dependency checks, audit-event counts. *(verify-evals.png, verify-monitoring.png)*
+6. **Guided tour** (optional opener) — login screen → "Start the guided tour": 8 steps, auto-advancing on real results, with Back/Next and clickable step dots so a presenter is never stuck; ends on a completion card with restart. *(tour-complete.png)*
 
 ---
 

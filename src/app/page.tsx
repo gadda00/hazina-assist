@@ -23,6 +23,7 @@ export default function Home() {
   const [officers, setOfficers] = useState<{ id: string; name: string; role: string }[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [directoryEmpty, setDirectoryEmpty] = useState(false);
+  const [preparing, setPreparing] = useState(false); // demo DB is being rebuilt (auto-heal)
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [loggingIn, setLoggingIn] = useState<string | null>(null);
 
@@ -36,9 +37,19 @@ export default function Home() {
       setCustomers(d.customers ?? []);
       setOfficers(d.officers ?? []);
       // Loaded fine but zero rows → the DB schema exists but was never seeded.
-      // Surface the exact fix instead of an infinite "loading…" spinner.
+      // (The auto-heal normally rebuilds it server-side before this response;
+      // if it could not, surface the exact fix instead of an infinite spinner.)
       if ((d.customers ?? []).length === 0 && (d.officers ?? []).length === 0) {
         setDirectoryEmpty(true);
+      }
+      // Auto-heal in progress (fresh/re-provisioned DB): poll until the demo
+      // state is fully staged, then re-read the directory.
+      const st = d.demoState as string | undefined;
+      if (st && st !== "ready") {
+        setPreparing(true);
+        setTimeout(() => void loadDirectory(), 2000);
+      } else {
+        setPreparing(false);
       }
     } catch {
       setLoadError(true);
@@ -159,6 +170,12 @@ export default function Home() {
                   to a signed session — never to a client-supplied id.
                 </p>
                 <div className="space-y-3">
+                  {preparing && (
+                    <div className="flex items-center gap-2 text-emerald-200 text-sm rounded-lg border border-emerald-700/60 bg-emerald-900/40 p-3">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Preparing the demo database — one moment (seeding the curated showcase)…
+                    </div>
+                  )}
                   {customers.map((c) => (
                     <button
                       key={c.id}
@@ -189,7 +206,7 @@ export default function Home() {
                       <Loader2 className="h-4 w-4 animate-spin" /> loading customers…
                     </div>
                   )}
-                  {directoryEmpty && (
+                  {directoryEmpty && !preparing && (
                     <div className="rounded-lg border border-amber-600/40 bg-amber-950/30 p-4 space-y-1.5">
                       <div className="text-sm font-medium text-amber-200">Demo directory is empty</div>
                       <p className="text-xs text-amber-100/70 leading-relaxed">

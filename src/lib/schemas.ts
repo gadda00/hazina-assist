@@ -37,7 +37,7 @@ export const ApprovalPostSchema = z.object({
 export const IdpPostSchema = z
   .object({
     sessionId: z.string().min(1).max(64),
-    sampleKey: z.enum(["clean", "scanned"]).optional(),
+    sampleKey: z.enum(["clean", "scanned", "flagged"]).optional(),
     text: z.string().max(20_000).optional(), // input-size limit even for the demo
     requestedAmountKes: z.number().int().min(1_000).max(5_000_000).optional(),
     tenorMonths: z.number().int().min(1).max(84).optional(),

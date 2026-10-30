@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import * as auth from "@/server/api/auth";
 import * as chat from "@/server/api/chat";
 import * as approvals from "@/server/api/approvals";
+import * as accounts from "@/server/api/accounts";
 import * as idp from "@/server/api/idp";
 import * as audit from "@/server/api/audit";
 import * as metrics from "@/server/api/metrics";
@@ -32,6 +33,7 @@ import * as evalRun from "@/server/api/eval";
  *   POST     /api/auth/logout  revoke the caller's demo session
  *   POST/GET /api/chat         orchestrator turn + history (own session only)
  *   GET/POST /api/approvals    HITL queue + officer decision (officer-only)
+ *   GET      /api/accounts     account overview (own session, customer-only)
  *   GET/POST /api/idp          payslip samples + loan-pack build (own session)
  *   GET      /api/audit        hash-chained audit viewer (officer-only)
  *   GET      /api/metrics      Prometheus exposition (officer-only)
@@ -52,6 +54,7 @@ const ROUTES: Record<string, Partial<Record<"GET" | "POST" | "PUT", Handler>>> =
   "auth/logout": { PUT: auth.PUT, POST: auth.PUT },
   chat: { GET: chat.GET, POST: chat.POST },
   approvals: { GET: approvals.GET, POST: approvals.POST },
+  accounts: { GET: accounts.GET },
   idp: { GET: idp.GET, POST: idp.POST },
   audit: { GET: audit.GET },
   metrics: { GET: metrics.GET },

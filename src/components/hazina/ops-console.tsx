@@ -27,6 +27,14 @@ export function OpsConsole({ session }: { session: SessionInfo }) {
   const [tab, setTab] = useState<ConsoleTab>("approvals");
   // tour progress marker: bumping this re-renders the banner after decisions
   const [tourTick, setTourTick] = useState(0);
+
+  useEffect(() => {
+    // guided tour: arriving at the officer console completes step 6 — the
+    // presenter signed out and back in as the officer (RBAC just applied).
+    // The banner refreshes itself via the tour-change event.
+    advanceTourTo(7);
+  }, []);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
       <TourBanner tick={tourTick} />
@@ -109,6 +117,15 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
     load();
   }, [load]);
 
+  // If the queue is empty, poll gently: the demo state may still be curating
+  // in the background (fresh DB auto-heal), or a customer may stage a
+  // transfer any moment. Stops as soon as work appears.
+  useEffect(() => {
+    if (tasks.some((t) => t.status === "open")) return;
+    const id = setInterval(() => void load(), 4000);
+    return () => clearInterval(id);
+  }, [tasks, load]);
+
   const decide = useCallback(
     async (taskId: string, decision: "approve" | "reject", reason?: string) => {
       setActing(taskId + decision);
@@ -165,6 +182,13 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
 
   const open = tasks.filter((t) => t.status === "open");
   const decided = tasks.filter((t) => t.status !== "open").slice(0, 8);
+  const stat = {
+    transfers: open.filter((t) => t.type === "transfer").length,
+    packs: open.filter((t) => t.type === "loan_pack").length,
+    highRisk: open.filter((t) => t.riskLevel === "high").length,
+    executed: tasks.filter((t) => t.status === "approved" && t.type === "transfer").length,
+    rejected: tasks.filter((t) => t.status === "rejected").length,
+  };
 
   if (loading) {
     return (
@@ -181,6 +205,23 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
           <div className="text-sm text-slate-600">
             <b className="text-slate-900">{open.length}</b> open task{open.length === 1 ? "" : "s"} awaiting a human decision.
             Transfers execute only after signature, expiry &amp; nonce verification.
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700 text-[10px]">
+                {stat.transfers} transfer{stat.transfers === 1 ? "" : "s"}
+              </Badge>
+              <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700 text-[10px]">
+                {stat.packs} loan pack{stat.packs === 1 ? "" : "s"}
+              </Badge>
+              <Badge variant="outline" className={`text-[10px] ${stat.highRisk > 0 ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-500"}`}>
+                {stat.highRisk} high risk
+              </Badge>
+              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
+                {stat.executed} executed
+              </Badge>
+              <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-[10px]">
+                {stat.rejected} rejected
+              </Badge>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* server-derived identity: read-only, from the officer session —

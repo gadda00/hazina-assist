@@ -8,12 +8,30 @@
  *
  * Each step states WHAT control is being demonstrated and (per the review)
  * WHAT IT DOES NOT PROVE — the tour teaches honest scope, not just wow.
- * State is client-side only; advancing is driven by real results arriving
- * (fee answers, refusals, OTP staging, approvals, audit verification), never
- * by timers.
+ * State is client-side only; auto-advancing is driven by real results
+ * arriving (fee answers, refusals, OTP staging, approvals, audit
+ * verification), never by timers.
+ *
+ * UX guarantee (fixed after "we get stuck at step 2"): the banner ALWAYS
+ * offers manual navigation — Back / Next / clickable step dots — so a
+ * presenter can never be trapped on a step whose auto-advance event hasn't
+ * fired yet. Auto-advance and manual navigation compose: auto only ever
+ * moves forward to the step after the one just completed; manual can also
+ * jump back to re-show a step.
  */
 
 const KEY = "hazina:tour";
+
+/** Browsers only: fired on every tour-state write so any mounted TourBanner
+ *  re-reads localStorage immediately — advances from ANY component (chat
+ *  results, citation clicks, officer decisions) reflect instantly. */
+const TOUR_CHANGE_EVENT = "hazina:tour-change";
+
+function writeTour(value: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(KEY, value);
+  window.dispatchEvent(new CustomEvent(TOUR_CHANGE_EVENT));
+}
 
 export interface TourStepDef {
   id: number;
@@ -37,7 +55,7 @@ export const TOUR_STEPS: TourStepDef[] = [
     id: 2,
     surface: "chat",
     title: "2 · Inspect the evidence",
-    hint: "Read the answer, then open the citation and the “Why this answer” panel on the right.",
+    hint: "Read the answer, then click a green citation to open its source excerpt, and read the “Why this answer” panel on the right. Or press Next to move on.",
     shows: "Every fee answer carries its source (tariff guide, effective date, page) and a node-by-node trace.",
     doesNotProve: "That citations are always correct in the wild — the eval gate covers the 55-case golden set.",
   },
@@ -91,10 +109,29 @@ export const TOUR_STEPS: TourStepDef[] = [
   },
 ];
 
+/** The step id that represents "all steps done" (tour complete). */
+export const TOUR_COMPLETE = TOUR_STEPS.length + 1;
+
+const COMPLETE_DEF: TourStepDef = {
+  id: TOUR_COMPLETE,
+  surface: "officer",
+  title: "Tour complete — the 3-minute proof",
+  hint: "Ask → Ground → Check → Confirm → Human review → Record: every control shown with its honest limits.",
+  shows: "Fee determinism, citations, safe refusal, OTP step-up, human approval and a verified audit chain — end to end.",
+  doesNotProve: "Production readiness — synthetic data, demo IAM and a mock core API throughout.",
+};
+
 export function tourActive(): boolean {
   if (typeof window === "undefined") return false;
   const v = window.localStorage.getItem(KEY);
   return v !== null && v !== "done";
+}
+
+/** Subscribe to tour-state changes (client-side). Returns an unsubscribe fn. */
+export function onTourChange(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(TOUR_CHANGE_EVENT, cb);
+  return () => window.removeEventListener(TOUR_CHANGE_EVENT, cb);
 }
 
 export function tourStep(): number {
@@ -104,21 +141,54 @@ export function tourStep(): number {
 }
 
 export function startTour(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, "1");
+  writeTour("1");
+}
+
+/** Restart from step 1 (offered on the completion card). */
+export function restartTour(): void {
+  writeTour("1");
 }
 
 export function endTour(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(KEY);
+  window.dispatchEvent(new CustomEvent(TOUR_CHANGE_EVENT));
 }
 
-/** Advance, never backwards — real results move the tour forward only. */
+/**
+ * Auto-advance on REAL results only. No-ops when the tour is not active, so
+ * normal (non-tour) usage never spawns a banner mid-session. Never moves
+ * backwards — a real result for step N completes it and reveals step N+1.
+ */
 export function advanceTourTo(step: number): void {
   if (typeof window === "undefined") return;
-  if (step > tourStep()) window.localStorage.setItem(KEY, String(step));
+  if (!tourActive()) return;
+  if (step > tourStep() && step <= TOUR_COMPLETE) {
+    writeTour(String(step));
+  }
+}
+
+/** Manual navigation: forward one step (caps at the completion step). */
+export function nextTourStep(): void {
+  if (typeof window === "undefined") return;
+  const cur = tourStep();
+  if (cur >= 1) writeTour(String(Math.min(cur + 1, TOUR_COMPLETE)));
+}
+
+/** Manual navigation: back one step (presenter may want to re-show a step). */
+export function prevTourStep(): void {
+  if (typeof window === "undefined") return;
+  const cur = tourStep();
+  if (cur > 1) writeTour(String(cur - 1));
+}
+
+/** Manual jump (step dots). */
+export function jumpTourTo(step: number): void {
+  if (typeof window === "undefined") return;
+  if (step >= 1 && step <= TOUR_COMPLETE) writeTour(String(step));
 }
 
 export function tourStepDef(step: number): TourStepDef | null {
+  if (step === TOUR_COMPLETE) return COMPLETE_DEF;
   return TOUR_STEPS.find((s) => s.id === step) ?? null;
 }

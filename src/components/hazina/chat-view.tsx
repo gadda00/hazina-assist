@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  AlertTriangle, BookOpen, Bot, ChevronRight, FileText, Loader2, Lock,
+  AlertTriangle, BookOpen, Bot, ChevronRight, FileText, Landmark, Loader2, Lock,
   Send, ShieldAlert, ShieldCheck, Sparkles, User, Wrench, KeyRound, Activity, FlaskConical,
 } from "lucide-react";
-import type { ChatMessage, ChatResult, SessionInfo } from "@/lib/types";
+import type { ChatMessage, ChatResult, Citation, SessionInfo } from "@/lib/types";
 import { apiFetch } from "@/lib/client-api";
 import { TourBanner } from "@/components/hazina/tour-banner";
 import { advanceTourTo } from "@/lib/tour";
@@ -111,7 +111,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
   );
 
   const processPayslip = useCallback(
-    async (sampleKey: "clean" | "scanned") => {
+    async (sampleKey: "clean" | "scanned" | "flagged") => {
       setBusy(true);
       try {
         const res = await apiFetch("/api/idp", {
@@ -244,6 +244,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
             </span>
             <button onClick={() => processPayslip("clean")} disabled={busy} className="underline hover:text-emerald-700">clean digital</button>
             <button onClick={() => processPayslip("scanned")} disabled={busy} className="underline hover:text-emerald-700">scanned (OCR noise)</button>
+            <button onClick={() => processPayslip("flagged")} disabled={busy} className="underline hover:text-red-700">tampered (validation fails)</button>
             {otpDev && (
               <span className="ml-auto flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
                 <KeyRound className="h-3 w-3" aria-hidden /> demo SMS: <b>{otpDev}</b>
@@ -253,7 +254,8 @@ export function ChatView({ session }: { session: SessionInfo }) {
         </div>
 
         {/* ---------------------- Explainability panel ---------------------- */}
-        <div className={`min-w-0 ${showTrace ? "" : "hidden lg:block"}`}>
+        <div className={`min-w-0 space-y-4 ${showTrace ? "" : "hidden lg:block"}`}>
+          <AccountOverview session={session} />
           <TracePanel session={session} last={lastAssistant} />
         </div>
       </div>
@@ -406,27 +408,148 @@ function MessageBubble({
           </div>
         )}
 
-        {/* citations */}
-        {citations.length > 0 && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2 space-y-1.5">
-            <div className="text-[10px] font-medium text-emerald-800 flex items-center gap-1 uppercase tracking-wide">
-              <BookOpen className="h-3 w-3" /> sources
+        {/* citations — click to expand the source excerpt (inspection =
+            the guided tour's step 2) */}
+        {citations.length > 0 && <CitationList citations={citations} />}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account overview — the customer's own balances + beneficiaries, scoped to
+// the authenticated session (GET /api/accounts). Mirrors a real banking app's
+// landing state; balances refresh after transfers execute.
+// ---------------------------------------------------------------------------
+
+interface AccountOverviewData {
+  accounts: { handle: string; maskedNumber: string; type: string; currency: string; balanceKes: number; lastActivityAt: string | null }[];
+  beneficiaries: { name: string; destinationType: string; masked: string; established: boolean }[];
+}
+
+function AccountOverview({ session }: { session: SessionInfo }) {
+  const [data, setData] = useState<AccountOverviewData | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await apiFetch("/api/accounts");
+      if (!r.ok) return;
+      setData((await r.json()) as AccountOverviewData);
+    } catch {
+      /* panel stays hidden on failure — chat itself is unaffected */
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/api/accounts")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && !cancelled) setData(d as AccountOverviewData);
+      })
+      .catch(() => void 0);
+    return () => {
+      cancelled = true;
+    };
+  }, [session.session.id]);
+
+  if (!data || data.accounts.length === 0) return null;
+  return (
+    <Card className="rounded-xl border-slate-200 bg-white shadow-sm h-fit" data-testid="account-overview">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Landmark className="h-4 w-4 text-emerald-700" />
+            <span className="text-sm font-medium text-slate-800">My accounts</span>
+          </div>
+          <button onClick={() => void load()} className="text-[10px] text-slate-400 hover:text-emerald-700" aria-label="Refresh balances">
+            refresh
+          </button>
+        </div>
+        {data.accounts.map((a) => (
+          <div key={a.handle} className="flex items-center justify-between rounded-lg border border-slate-100 px-2.5 py-2">
+            <div>
+              <div className="text-[11px] font-mono text-slate-700">
+                {a.handle} <span className="text-slate-400">{a.maskedNumber}</span>
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {a.type} · {a.currency}
+                {a.lastActivityAt ? ` · last activity ${new Date(a.lastActivityAt).toLocaleDateString()}` : ""}
+              </div>
             </div>
-            {citations.map((c, i) => (
-              <div key={i} className="text-[11px] text-slate-600 flex gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
-                <span>
-                  <span className="font-mono text-emerald-800">
-                    [{c.docId} p.{c.page}]
-                  </span>{" "}
-                  {c.title}
-                  {c.effectiveDate && <span className="text-slate-400"> · effective {c.effectiveDate}</span>}
+            <div className="font-mono text-sm font-semibold text-slate-900">
+              KES {a.balanceKes.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        ))}
+        {data.beneficiaries.length > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-slate-100">
+            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">beneficiaries</div>
+            {data.beneficiaries.map((b) => (
+              <div key={b.name} className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-600 truncate">{b.name}</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <span className="font-mono text-slate-400">{b.masked}</span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] px-1 py-0 ${b.established ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                  >
+                    {b.established ? b.destinationType : `new · ${b.destinationType}`}
+                  </Badge>
                 </span>
               </div>
             ))}
+            <p className="text-[9px] text-slate-400 leading-relaxed">
+              NEW beneficiaries trigger a 30-minute cooling-off before the first send (fraud control).
+            </p>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Citations — click to expand the source excerpt (evidence inspection)
+// ---------------------------------------------------------------------------
+
+function CitationList({ citations }: { citations: Citation[] }) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2 space-y-1.5">
+      <div className="text-[10px] font-medium text-emerald-800 flex items-center gap-1 uppercase tracking-wide">
+        <BookOpen className="h-3 w-3" /> sources — click to inspect
       </div>
+      {citations.map((c, i) => (
+        <div key={i} className="text-[11px] text-slate-600">
+          <button
+            onClick={() => {
+              setOpen(open === i ? null : i);
+              // guided tour: the user literally inspected the evidence → step 2 done
+              if (open !== i) advanceTourTo(3);
+            }}
+            data-testid={`citation-${i}`}
+            aria-expanded={open === i}
+            className="flex gap-1.5 text-left w-full rounded p-0.5 hover:bg-emerald-100/60 transition"
+          >
+            <FileText className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+            <span>
+              <span className="font-mono text-emerald-800">
+                [{c.docId} p.{c.page}]
+              </span>{" "}
+              {c.title}
+              {c.effectiveDate && <span className="text-slate-400"> · effective {c.effectiveDate}</span>}
+              {open !== i && <span className="text-emerald-600"> · ▾</span>}
+            </span>
+          </button>
+          {open === i && (
+            <div className="mt-1 ml-5 rounded border border-emerald-200 bg-white p-2 text-[10px] leading-relaxed text-slate-600">
+              <span className="font-mono text-[9px] text-emerald-700 block mb-0.5">{c.breadcrumb}</span>
+              {c.snippet ?? "No excerpt stored for this citation."}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -38,8 +38,9 @@ console.log("\n── Login directory ──");
 {
   const r = await fetch(`${BASE}/api/auth/login`);
   const d = await r.json();
-  ok("directory lists customers", d.customers?.length >= 2);
-  ok("directory lists officer", d.officers?.length >= 1);
+  ok("directory lists customers", d.customers?.length >= 5, `n=${d.customers?.length}`);
+  ok("directory lists officers", d.officers?.length >= 2, `n=${d.officers?.length}`);
+  ok("directory reports demoState ready", d.demoState === "ready", `demoState=${d.demoState}`);
   const cust = d.customers.find((c) => c.name.includes("Amina"));
   globalThis.aminaId = cust.id;
   globalThis.officerId = d.officers[0].id;
@@ -117,6 +118,30 @@ let verified = false;
   ok("payslip IDP processing", r.ok && !!d.taskId && !!d.extracted, `taskId=${d.taskId?.slice(0, 12)} employer=${d.extracted?.employer?.value}`);
 }
 
+// TAMPERED payslip — deterministic validation must flag it
+{
+  const r = await fetch(`${BASE}/api/idp`, {
+    method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${CT}` },
+    body: JSON.stringify({ sessionId: CS, sampleKey: "flagged", requestedAmountKes: 150000, tenorMonths: 12 }),
+  });
+  const d = await r.json();
+  const failedRules = (d.validation?.rules ?? []).filter((x) => !x.passed).map((x) => x.rule);
+  ok("tampered payslip flagged", r.ok && d.validation?.ok === false && failedRules.length >= 2, `failed=[${failedRules.join(",")}]`);
+}
+
+// account overview (new scoped endpoint)
+{
+  const { status, d } = await get(CT, "/api/accounts");
+  ok("account overview (customer)", status === 200 && d.accounts?.length === 2 && d.accounts[0].balanceKes > 0, `accounts=${d.accounts?.length} bal=${d.accounts?.[0]?.balanceKes}`);
+}
+
+// account overview RBAC: officer token must be refused
+{
+  const off2 = await login(globalThis.officerId, "officer");
+  const r = await fetch(`${BASE}/api/accounts`, { headers: { authorization: `Bearer ${off2.session.token}` } });
+  ok("RBAC blocks officer from /api/accounts", r.status === 403, `status=${r.status}`);
+}
+
 // chat history
 {
   const { status, d } = await get(CT, `/api/chat?sessionId=${CS}`);
@@ -133,6 +158,11 @@ ok("officer login", off.session.role === "officer");
 {
   const { status, d } = await get(OT, "/api/approvals");
   ok("approvals queue loads", status === 200 && Array.isArray(d.tasks), `tasks=${d.tasks?.length} status=${status}`);
+  const open = (d.tasks ?? []).filter((t) => t.status === "open");
+  ok("queue has open transfer + loan pack (curated)", open.some((t) => t.type === "transfer") && open.some((t) => t.type === "loan_pack"), `open=${open.length}`);
+  const decided = (d.tasks ?? []).filter((t) => t.status !== "open");
+  ok("queue shows decided history (approved + rejected)", decided.some((t) => t.status === "approved") && decided.some((t) => t.status === "rejected"), `decided=${decided.length}`);
+  ok("loan-pack payload shows customer NAME (not id)", (d.tasks ?? []).every((t) => t.type !== "loan_pack" || typeof t.payload?.customer !== "string" || !/^cm[a-z0-9]{20,}$/.test(t.payload.customer)), `sample=${d.tasks?.find((t) => t.type === "loan_pack")?.payload?.customer}`);
 }
 
 // audit chain

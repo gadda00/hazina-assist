@@ -17,7 +17,9 @@ async function fixture(name: string, balance: number) {
   let customer = await db.customer.findUnique({ where: { phone } });
   if (!customer) {
     customer = await db.customer.create({
-      data: { name: `Race ${name}`, phone, role: "customer", email: `race-${name}@example.co.ke` },
+      // role "fixture" keeps test rows OUT of the demo login directory
+      // (RBAC checks the SESSION role, not this column)
+      data: { name: `Race ${name}`, phone, role: "fixture", email: `race-${name}@example.co.ke` },
     });
   }
   const handle = `acct_race_${name}`;
