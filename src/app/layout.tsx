@@ -14,6 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // metadataBase silences the Next.js warning AND makes OG/Twitter image URLs
+  // resolve absolutely on every host (localhost preview, Vercel, custom domain).
+  // Set NEXT_PUBLIC_SITE_URL to the canonical deployment URL when one exists.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Hazina Assist — Bank-Grade AI Assistant",
   description:
     "Bank-grade AI assistant: policy Q&A with citations, account tools, human-approved transfers, payslip intelligence, guardrails, hash-chained audit and evaluation. Built to CBK-aligned controls.",

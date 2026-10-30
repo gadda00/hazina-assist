@@ -74,6 +74,12 @@ describe("demo session auth", () => {
       await db.customer.deleteMany({ where: { phone: PHONE } });
     }
 
+    // Cleanup MUST run even when an assertion fails mid-test — otherwise the
+    // officer row below (role credit_officer) survives as residue that both
+    // pollutes the demo login directory AND fakes a "live" DB for the
+    // ensure-seed auto-heal (bun:test does not roll back). Hence try/finally.
+    const ownSessionIds: string[] = [];
+    try {
     const officer = await db.customer.upsert({
       where: { phone: PHONE },
       update: {},
@@ -83,7 +89,6 @@ describe("demo session auth", () => {
     expect(customer).toBeTruthy();
     // the session THIS test creates for the seed customer (never touch the
     // seed customer's other sessions — e.g. leftovers from browser smoke runs)
-    const ownSessionIds: string[] = [];
 
     // customer login works; officer login on a customer record is refused
     const cust = await createDemoSession(customer!.id, "customer");
@@ -125,11 +130,14 @@ describe("demo session auth", () => {
       expect(byHash?.id).toBe(cust.session.id);
     }
 
-    // cleanup: ONLY what this test created (login appends audit events →
-    // delete them before the sessions; the officer customer goes last)
+    // cleanup (finally): ONLY what this test created (login appends audit
+    // events → delete them before the sessions; the officer customer goes
+    // last). Runs even when an assertion above threw.
+    } finally {
     await db.auditEvent.deleteMany({ where: { sessionId: { in: ownSessionIds } } });
     await db.chatSession.deleteMany({ where: { id: { in: ownSessionIds } } });
     await db.customer.deleteMany({ where: { phone: PHONE } });
+    }
   });
 });
 
@@ -145,7 +153,9 @@ describe("OTP step-up", () => {
     const c = await db.customer.upsert({
       where: { phone: PHONE },
       update: {},
-      create: { name: "Otp Test Customer", phone: PHONE, role: "customer" },
+      // role "fixture" keeps this row OUT of the demo login directory and the
+      // ensure-seed real-customer count (customer sessions never check role)
+      create: { name: "Otp Test Customer", phone: PHONE, role: "fixture" },
     });
     customerId = c.id;
     const s = await db.chatSession.create({ data: { customerId } });
@@ -222,7 +232,8 @@ describe("core transfer idempotency", () => {
     const c = await db.customer.upsert({
       where: { phone: PHONE },
       update: {},
-      create: { name: "Idempotency Test", phone: PHONE, role: "customer" },
+      // role "fixture": see OTP block above
+      create: { name: "Idempotency Test", phone: PHONE, role: "fixture" },
     });
     const a = await db.account.create({
       data: {

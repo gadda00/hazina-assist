@@ -40,6 +40,8 @@ export function ChatView({ session }: { session: SessionInfo }) {
   const [otpDev, setOtpDev] = useState<string | null>(null);
   const [showTrace, setShowTrace] = useState(true);
   const [tourTick, setTourTick] = useState(0);
+  const [acctTick, setAcctTick] = useState(0); // bump → "My accounts" rail reloads
+  const busyRef = useRef(false); // stable busy flag for the poll interval
   const endRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -55,11 +57,40 @@ export function ChatView({ session }: { session: SessionInfo }) {
 
   useEffect(scrollToBottom, [messages, scrollToBottom]);
 
+  // Live transcript + balance polling: when an officer decides in the ops
+  // console, the receipt is posted straight to this session (postCustomerMessage)
+  // and the transfer debits the account — without this poll the customer would
+  // only see both after a reload. Skipped while a send is in flight, and the
+  // replacement guard below never clobbers an optimistic message pair.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (busyRef.current) return;
+      apiFetch(`/api/chat?sessionId=${session.session.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d) return;
+          const server = (d.messages ?? []) as Msg[];
+          setMessages((local) => {
+            // local optimistic messages carry synthetic ids ("u-…"/"a-…") and
+            // are re-fetched with real ids after each send; replace only when
+            // the server transcript has grown beyond what we really hold
+            // (officer receipt / background curation), so in-flight sends are safe.
+            const localReal = local.filter((m) => !m.id.startsWith("u-") && !m.id.startsWith("a-"));
+            return server.length > localReal.length ? server : local;
+          });
+          setAcctTick((t) => t + 1);
+        })
+        .catch(() => void 0);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [session.session.id]);
+
   const send = useCallback(
     async (text: string) => {
       const content = text.trim();
       if (!content || busy) return;
       setBusy(true);
+      busyRef.current = true;
       setInput("");
       setMessages((m) => [
         ...m,
@@ -102,10 +133,12 @@ export function ChatView({ session }: { session: SessionInfo }) {
         if (d.kind === "otp_required") advanceTourTo(5);
         if (d.kind === "transfer_pending_approval") advanceTourTo(6);
         setTourTick((t) => t + 1);
+        setAcctTick((t) => t + 1); // balances may have changed (fee disclosure/execution)
       } catch {
         toast({ title: "Message failed", description: "The orchestrator could not process that.", variant: "destructive" });
       } finally {
         setBusy(false);
+        busyRef.current = false;
       }
     },
     [busy, session.session.id, toast]
@@ -256,7 +289,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
 
         {/* ---------------------- Explainability panel ---------------------- */}
         <div className={`min-w-0 space-y-4 ${showTrace ? "" : "hidden lg:block"}`}>
-          <AccountOverview session={session} />
+          <AccountOverview session={session} refreshKey={acctTick} />
           <TracePanel session={session} last={lastAssistant} />
         </div>
       </div>
@@ -428,7 +461,7 @@ interface AccountOverviewData {
   beneficiaries: { name: string; destinationType: string; masked: string; established: boolean }[];
 }
 
-function AccountOverview({ session }: { session: SessionInfo }) {
+function AccountOverview({ session, refreshKey }: { session: SessionInfo; refreshKey: number }) {
   const [data, setData] = useState<AccountOverviewData | null>(null);
 
   const load = useCallback(async () => {
@@ -452,7 +485,9 @@ function AccountOverview({ session }: { session: SessionInfo }) {
     return () => {
       cancelled = true;
     };
-  }, [session.session.id]);
+    // refreshKey: bumped after each assistant result and by the live poll, so
+    // executed transfers reflect in the rail without a manual refresh
+  }, [session.session.id, refreshKey]);
 
   if (!data || data.accounts.length === 0) return null;
   return (

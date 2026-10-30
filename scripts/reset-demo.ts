@@ -25,9 +25,18 @@ async function main() {
 
   // Purge test/eval fixture identities so the login screen shows only the
   // curated seed personas (Race* from transfer-race tests, Eval Fixture from
-  // the eval harness — both recreate themselves when their suites re-run).
+  // the eval harness, Test Officer from the safety suite — all recreate
+  // themselves when their suites re-run). Mirrors RESIDUE_WHERE in
+  // src/lib/ensure-seed.ts, including role "fixture".
   const fixtures = await db.customer.findMany({
-    where: { OR: [{ name: { startsWith: "Race " } }, { name: "Eval Fixture" }] },
+    where: {
+      OR: [
+        { role: "fixture" },
+        { name: { startsWith: "Race " } },
+        { name: "Eval Fixture" },
+        { name: "Test Officer" },
+      ],
+    },
     select: { id: true },
   });
   for (const f of fixtures) {

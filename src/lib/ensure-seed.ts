@@ -1,23 +1,31 @@
 /**
  * Runtime auto-heal for the demo database.
  *
- * WHY: the workspace/demo DB can be re-provisioned with schema but zero rows
- * (observed in practice). The login screen then shows an empty directory and
- * the officer console an empty queue — "everything is blank". Instead of
- * asking a presenter to run `bun run seed` mid-demo, the first
- * GET /api/auth/login detects the empty DB and rebuilds the full showcase:
+ * WHY: the workspace/demo DB can be re-provisioned with schema but partial or
+ * test-only rows (observed in practice: a recycled workspace left a DB whose
+ * ONLY contents were test fixtures — "Race *", "Eval Fixture" and a
+ * "Test Officer" whose role is credit_officer). The login screen then shows a
+ * polluted or empty directory, fee answers break (no tariff rows) and RAG
+ * breaks (no knowledge chunks) — "everything is blank".
  *
- *   1. reference data (customers, accounts, txns, tariffs, KB, officers)
- *      — awaited, so the directory answers immediately after
- *   2. curated demo state (warm chats, OTP-verified pending transfers,
- *      payslip packs incl. a tampered one, executed + rejected history)
- *      — produced by the SAME orchestrator/IDP/approval code paths a real
- *        demo click takes, in the background
+ * The health check must therefore verify the ACTUAL demo ground truth, not
+ * merely "some rows exist":
  *
- * The login screen polls `demoState` until it is "ready". Idempotent:
- * the seed uses upserts; the curator only runs when NOTHING has happened yet
- * (zero chat sessions), so a reset-demo followed by a reload rebuilds the
- * showcase, while a live demo is never touched.
+ *   referenceOk  — the five known seed customers, both seed officers, at least
+ *                  one tariff row and one knowledge chunk are present
+ *   hasActivity  — real usage has happened (messages or audit events; session
+ *                  husks with zero messages do NOT count)
+ *
+ *   referenceOk && hasActivity  → live demo: never touched
+ *   otherwise                   → rebuild:
+ *       1. purge test residue (fixtures / test officers) — FK-safe
+ *       2. re-seed reference data (idempotent upserts — safe even if the
+ *          demo is otherwise live and only the tariff/KB rows vanished)
+ *       3. curate the showcase through the SAME orchestrator/IDP/approval
+ *          code paths a real demo click takes — only when nothing has
+ *          happened yet, so a live demo is never double-curated
+ *
+ * The login screen polls `demoState` until it is "ready".
  */
 import { db } from "@/lib/db";
 import { seedAll } from "@/lib/seed-data";
@@ -35,19 +43,56 @@ export function demoState(): DemoState {
   return state;
 }
 
+/** The identities `seedAll` guarantees. Anything else in those roles is residue. */
+const SEED_CUSTOMER_PHONES = [
+  "+254712345678", // Amina Wanjiru
+  "+254723456789", // Brian Otieno
+  "+254733456788", // Kevin Mutua
+  "+254741122334", // Zawadi Hassan
+  "+254745566778", // Grace Wanjala
+];
+const SEED_OFFICER_PHONES = ["+254700000001", "+254700000002"]; // Njeri, Kamau
+
+/** Rows that only ever come from tests/evals — never demo state. */
+const RESIDUE_WHERE = {
+  OR: [
+    { role: "fixture" },
+    { name: { startsWith: "Race " } },
+    { name: "Eval Fixture" },
+    { name: "Test Officer" },
+  ],
+};
+
 /** Public entry: call at the top of GET /api/auth/login. Never throws. */
 export async function ensureSeeded(): Promise<void> {
   try {
-    // "real" demo identities only: test/eval fixtures use role "fixture" so
-    // they never appear in (nor satisfy) the demo directory.
-    const realCustomers = await db.customer.count({ where: { role: { in: ["customer", "credit_officer", "approver"] } } });
-    const sessions = await db.chatSession.count();
-    if (realCustomers > 0 && sessions > 0) {
+    const [seedCustomers, seedOfficers, tariffRows, chunks, messages, auditEvents, residue] =
+      await Promise.all([
+        db.customer.count({ where: { phone: { in: SEED_CUSTOMER_PHONES } } }),
+        db.customer.count({ where: { phone: { in: SEED_OFFICER_PHONES } } }),
+        db.tariffRow.count(),
+        db.knowledgeChunk.count(),
+        db.message.count(),
+        db.auditEvent.count(),
+        db.customer.count({ where: RESIDUE_WHERE }),
+      ]);
+
+    const referenceOk =
+      seedCustomers === SEED_CUSTOMER_PHONES.length &&
+      seedOfficers === SEED_OFFICER_PHONES.length &&
+      tariffRows > 0 &&
+      chunks > 0;
+    // Real usage leaves messages AND audit events; a session husk with none
+    // is interrupted curation, not a live demo.
+    const hasActivity = messages > 0 || auditEvents > 0;
+
+    if (referenceOk && hasActivity && residue === 0) {
       state = "ready";
-      return; // live DB — never touch it
+      return; // live demo DB — never touch it
     }
+
     if (!g.__hazinaEnsure) {
-      g.__hazinaEnsure = rebuild(realCustomers === 0).finally(() => {
+      g.__hazinaEnsure = rebuild(referenceOk, hasActivity).finally(() => {
         g.__hazinaEnsure = undefined;
       });
     }
@@ -64,11 +109,21 @@ export async function ensureSeeded(): Promise<void> {
   }
 }
 
-async function rebuild(needsSeed: boolean): Promise<void> {
+async function rebuild(referenceOk: boolean, hasActivity: boolean): Promise<void> {
   state = "seeding";
-  if (needsSeed) {
-    console.log("[ensure-seed] demo DB is empty — seeding reference data…");
+  try {
+    await purgeResidue();
+  } catch (e) {
+    console.error("[ensure-seed] residue purge incomplete (continuing):", e);
+  }
+  if (!referenceOk) {
+    console.log("[ensure-seed] demo reference data incomplete — re-seeding (idempotent)…");
     await seedAll(db);
+  }
+  if (hasActivity) {
+    // Reference repaired, but the demo already has history: never re-curate.
+    state = "ready";
+    return;
   }
   state = "curating";
   try {
@@ -80,6 +135,36 @@ async function rebuild(needsSeed: boolean): Promise<void> {
     // the presenter can drive any flow manually; log and move on.
     console.error("[ensure-seed] curation incomplete:", e);
     state = "ready";
+  }
+}
+
+/**
+ * Remove test/eval identities FK-safely. Mirrors scripts/purge-fixtures.ts.
+ * Only ever runs on a rebuild path — a live demo (activity + full reference
+ * data + no residue) returns before this is reached.
+ */
+async function purgeResidue(): Promise<void> {
+  const fixtures = await db.customer.findMany({
+    where: RESIDUE_WHERE,
+    select: { id: true, name: true },
+  });
+  for (const f of fixtures) {
+    const sess = await db.chatSession.findMany({ where: { customerId: f.id }, select: { id: true } });
+    for (const s of sess) {
+      await db.message.deleteMany({ where: { sessionId: s.id } });
+      await db.auditEvent.deleteMany({ where: { sessionId: s.id } });
+      await db.otpCode.deleteMany({ where: { sessionId: s.id } });
+      await db.pendingAction.deleteMany({ where: { sessionId: s.id } });
+      await db.transferIntent.deleteMany({ where: { sessionId: s.id } });
+      await db.payslipPack.deleteMany({ where: { sessionId: s.id } });
+      await db.approvalTask.deleteMany({ where: { sessionId: s.id } });
+    }
+    await db.chatSession.deleteMany({ where: { customerId: f.id } });
+    await db.beneficiary.deleteMany({ where: { customerId: f.id } });
+    await db.transaction.deleteMany({ where: { account: { customerId: f.id } } });
+    await db.account.deleteMany({ where: { customerId: f.id } });
+    await db.customer.delete({ where: { id: f.id } });
+    console.log("[ensure-seed] purged test residue:", f.name);
   }
 }
 

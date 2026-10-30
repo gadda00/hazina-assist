@@ -178,10 +178,18 @@ ok("officer login", off.session.role === "officer");
   ok("evals endpoint loads", status === 200, `status=${status} keys=${Object.keys(d ?? {}).join(",")}`);
 }
 
-// metrics
+// metrics — Prometheus text format: assert the actual metric families expose
+// (a 200 with an empty body would previously pass this check)
 {
-  const { status, d } = await get(OT, "/api/metrics");
-  ok("metrics endpoint loads", status === 200, `keys=${Object.keys(d ?? {}).slice(0, 8).join(",")}`);
+  const r = await fetch(`${BASE}/api/metrics`, { headers: { authorization: `Bearer ${OT}` } });
+  const text = await r.text().catch(() => "");
+  const families = [...text.matchAll(/^# HELP (\w+)/gm)].map((m) => m[1]);
+  const required = ["hazina_requests_total", "hazina_request_latency_ms", "hazina_escalation_rate", "hazina_audit_events_total"];
+  ok(
+    "metrics endpoint exposes Prometheus families",
+    r.status === 200 && required.every((f) => families.includes(f)),
+    `families=${families.length} sample=${families[0] ?? "none"}`
+  );
 }
 
 // tools listing
