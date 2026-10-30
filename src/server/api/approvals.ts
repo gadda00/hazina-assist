@@ -57,6 +57,10 @@ export async function GET(req: Request) {
  *    so two simultaneous clicks decide exactly once
  *  - replaying a decided task returns the ORIGINAL receipt (ok + replayed)
  *    instead of an error — a double-click can never double-debit
+ *
+ * IDENTITY (deep-review P1-7): the recorded actor is DERIVED FROM THE
+ * AUTHENTICATED OFFICER SESSION, never from client-supplied input — the
+ * audit chain cannot be attributed to a name typed into a browser field.
  */
 export async function POST(req: Request) {
   const auth = await requireDemoOfficer(req);
@@ -64,8 +68,8 @@ export async function POST(req: Request) {
 
   const parsed = await parseBody(req, ApprovalPostSchema);
   if (!parsed.ok) return parsed.response;
-  const { taskId, decision, officer, reason } = parsed.data;
-  const officerName = officer ?? auth.data.customerName;
+  const { taskId, decision, reason } = parsed.data;
+  const officerName = auth.data.customerName; // server-derived identity
 
   try {
     const task = await db.approvalTask.findUnique({ where: { id: taskId } });

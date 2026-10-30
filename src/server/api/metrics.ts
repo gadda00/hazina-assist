@@ -1,17 +1,40 @@
 import { db } from "@/lib/db";
 import { requireDemoOfficer } from "@/lib/authz";
 import { ERR } from "@/lib/schemas";
+import { timingSafeEqual } from "node:crypto";
 
 /**
  * GET /api/metrics — Prometheus text exposition format, fed by REAL data:
  * guardrail trip counts, escalation rate, latency and cost aggregates from
- * the audit chain. Prometheus scrapes this in the Compose deployment
- * (deploy/prometheus.yml); the Ops console "Monitoring" tab renders the same
- * numbers directly. Officer-only.
+ * the audit chain (newest ≤5,000 events — the documented window; counters
+ * reset when the demo DB resets). The Ops console "Monitoring" tab renders
+ * the same numbers directly.
+ *
+ * AUTHORIZATION (deep-review P1-5) — one of:
+ *   1. a dedicated scrape token: `Authorization: Bearer <HAZINA_METRICS_TOKEN>`
+ *      (or `x-scrape-token: …`) — the read-only identity Prometheus uses in
+ *      the Compose/K8s deployment (deploy/prometheus.yml). Rotation is a
+ *      coordinated env change on both sides.
+ *   2. an officer demo session (the ops console).
+ * Metrics never become fully public: without either credential this returns
+ * 401 — a scraper without auth is a red flag, not a working dashboard.
  */
+function scrapeTokenOk(req: Request): boolean {
+  const expected = process.env.HAZINA_METRICS_TOKEN?.trim() ?? "";
+  if (!expected) return false;
+  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+  const header = req.headers.get("x-scrape-token")?.trim() ?? "";
+  const supplied = bearer || header;
+  if (!supplied || supplied.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+}
+
 export async function GET(req: Request) {
-  const auth = await requireDemoOfficer(req);
-  if (!auth.ok) return auth.response;
+  const scrapeAuthorized = scrapeTokenOk(req);
+  if (!scrapeAuthorized) {
+    const auth = await requireDemoOfficer(req);
+    if (!auth.ok) return auth.response;
+  }
   try {
   const events = await db.auditEvent.findMany({ take: 5000 });
   const payloads = events.map((e) => {
@@ -35,7 +58,7 @@ export async function GET(req: Request) {
   const totalRespond = respond.length || 1;
 
   const lines = [
-    "# HELP hazina_requests_total Total orchestrator responses",
+    "# HELP hazina_requests_total Total orchestrator responses (audit-derived, newest 5000-event window)",
     "# TYPE hazina_requests_total counter",
     `hazina_requests_total ${respond.length}`,
     "# HELP hazina_request_latency_ms Orchestrator latency in milliseconds",

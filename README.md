@@ -87,14 +87,17 @@ user: "Send 2000 to Jane on M-Pesa"
 ## Quickstart
 
 ```bash
+# 0. local env (the prisma CLI reads DATABASE_URL from it)
+cp .env.example .env          # then set the ABSOLUTE sqlite path inside
+
 bun install
-bun run db:push          # create SQLite schema (prisma CLI reads .env)
+bun run db:push          # create SQLite schema (non-destructive; force variant exists for resets)
 bun run seed             # synthetic customers, accounts, tariff guide, KB
 bun run dev              # http://localhost:3000
 
 # quality gates
-bun test                 # 61 unit + contract + safety tests
-bun run eval             # golden set through the REAL orchestrator → docs/eval/eval-report.md
+bun test                 # 75 unit + contract + safety + race tests
+bun run eval             # deterministic golden-set gate → docs/eval/eval-report.md
 bun run lint
 bun run typecheck        # tsc --noEmit — a HARD gate, zero known errors
 
@@ -104,7 +107,10 @@ uvicorn main:app --port 8001
 # then: CATEGORISER_URL=http://localhost:8001 bun run dev
 ```
 
-Demo login: pick **Amina Wanjiru** (established beneficiary Jane → transfers flow to OTP + approval) or **Brian Otieno** — or the clearly-labelled **Demo officer console** entry (Officer Njeri) for the HITL side. Customers and officers get separate server-side sessions; the role split is enforced on every endpoint, not just in the UI.
+> If the login screen says **“Demo directory is empty”**, the database was
+> re-provisioned without seed data — run `bun run seed` and reload.
+
+Demo login: pick **Amina Wanjiru** (established beneficiary Jane → transfers flow to OTP + approval) or **Brian Otieno** — or the clearly-labelled **Demo officer console** entry (Officer Njeri) for the HITL side. Customers and officers get separate server-side sessions; the role split is enforced on every endpoint, not just in the UI. New: a third entry — **Guided tour** — walks a first-time visitor through the whole control journey in 8 steps (tariff question → citation → safe refusal → transfer → OTP → officer approval → audit verification), with each step stating what it shows *and what it does not prove*.
 
 ### 3-minute demo script
 
@@ -145,7 +151,7 @@ Screenshots of every step live in `docs/screenshots/`.
 | Secure design to approved architecture | Guardrails at input/context/tools/output; ADRs; threat model | `docs/governance/threat-model.md`, `docs/adr/` |
 | Integrate DS models, keep separation | Categoriser service + contract tests + model card | `services/categoriser/`, `tests/categoriser-contract.test.ts` |
 | Prompt engineering, evaluation, guardrails, HITL, fallback, audit, explainability | Prompt contracts in `rag.ts`; eval gate; guard_in/guard_out; approval queue; circuit-breaker fallback; hash chain; trace panel | `docs/eval/eval-report.md`, audit tab (verify chain), trace panel |
-| Clean, tested code, peer review | 46 tests + CI (lint, typecheck, tests, eval gate, security scans) | `.github/workflows/ci.yml` |
+| Clean, tested code, peer review | 75 tests + CI (lint, typecheck, tests, eval gate, helm render, security scans) | `.github/workflows/ci.yml` |
 | Monitoring and cost | `/api/metrics` (Prometheus format), cost per call in traces, Compose + Grafana | Monitoring tab; `deploy/` |
 | Documentation, reusable components | This README, governance pack, `packages/hazina-kit` | `packages/hazina-kit/README.md` ("a new squad starts in one hour") |
 
@@ -160,9 +166,13 @@ Screenshots of every step live in `docs/screenshots/`.
 
 ## Deployment
 
+**Demo / production boundary (explicit):** the app boots in `DEPLOYMENT_MODE=demo` by default — synthetic data, the demo identity picker, OTP code revealed in the UI, and a development signing-secret fallback. `DEPLOYMENT_MODE=operational` **fails closed at startup** (`src/instrumentation.ts` → `src/lib/deployment.ts`) unless a real ≥32-char `HAZINA_INTENT_SECRET`, `DEMO_MODE=false`, and an OTP delivery provider are configured; and because this build ships demo IAM only (no OIDC), login is refused outright in operational mode until a real IdP is integrated. Unit tests pin the fail-closed behaviour (`tests/deployment.test.ts`).
+
 - **Live app (Vercel):** one-click — `vercel.com/new/clone?repository-url=https://github.com/gadda00/hazina-assist` — zero config, zero env vars. The whole API ships as a **single serverless function** (`src/app/api/[[...path]]/route.ts` → `src/server/api/*.ts`) so the demo SQLite DB stays one shared `/tmp` copy instead of forking per-route lambdas. The Vercel posture is regression-tested locally by `scripts/run-vercel-sim.sh` (15 checks incl. the full HITL transfer flow). Full guide: **[`DEPLOY.md`](DEPLOY.md)**.
 - **Local:** runs on SQLite (zero-config) — see Quickstart.
-- **Production posture:** docker-compose (`deploy/docker-compose.yml`) with Postgres, the categoriser service, Prometheus scraping `/api/metrics` and Grafana; Helm chart for k8s (`deploy/helm/`). Set `HAZINA_INTENT_SECRET` and `DATABASE_URL` in the environment — never in code.
+- **Self-hosted demo stack:** docker-compose (`deploy/docker-compose.yml`) with the categoriser service, Prometheus (authenticated scrape — see below) and Grafana; Helm chart for k8s (`deploy/helm/`, `helm lint` + `helm template` are enforced in CI). Set `HAZINA_INTENT_SECRET` and `HAZINA_METRICS_TOKEN` in the environment — never in code.
+- **Database: SQLite only in this build.** The Prisma schema pins the SQLite provider; a `postgresql://` `DATABASE_URL` is **not** usable without a Postgres schema/client/migration path, which is explicit roadmap work (see DEPLOY.md). Do not label a deployment “production-shaped” on the current database path.
+- **Monitoring:** `/api/metrics` is never public. Prometheus authenticates with a dedicated scrape token (`HAZINA_METRICS_TOKEN` → Bearer credential in `deploy/prometheus.yml`; rotate both sides together); the ops console uses officer sessions. Metrics are audit-derived over the newest ≤5,000-event window and reset with the demo DB — documented in the endpoint itself.
 
 ### Ship it: GitHub, Pages and Vercel in three steps
 
@@ -174,18 +184,20 @@ GH_TOKEN=<classic PAT: repo + workflow scopes> \
 ```
 
 2. **GitHub Pages** goes live at `https://<user>.github.io/hazina-assist/` within ~a minute — a static showcase of the build (capabilities, guarantee chain, eval results) served from `docs/`, linking to the live app.
-3. **Vercel:** *Add New → Project* → import `hazina-assist` → *Deploy* (or the one-click clone URL above). No env vars needed for the demo: the build provisions the SQLite DB (`scripts/vercel-build.sh`), the bundle carries it (`outputFileTracingIncludes`), and the single API function clones it to a writable `/tmp` copy at cold start (`src/lib/db.ts`). For production, set `HAZINA_INTENT_SECRET` + a Postgres `DATABASE_URL` in project settings.
+3. **Vercel:** *Add New → Project* → import `hazina-assist` → *Deploy* (or the one-click clone URL above). No env vars needed for the demo: the build provisions the SQLite DB (`scripts/vercel-build.sh`), the bundle carries it (`outputFileTracingIncludes`), and the single API function clones it to a writable `/tmp` copy at cold start (`src/lib/db.ts`). For a self-hosted deployment set `HAZINA_INTENT_SECRET` (+ scrape token) in the environment.
 
-> **Honest note on the demo DB:** writes (chat history, audit events, staged transfers) live for the life of a lambda instance and reset to seed state when it recycles. That is a deliberate demo trade-off — the persistence contract (Prisma models, audit chain, idempotency) is unchanged; point `DATABASE_URL` at Postgres and everything works without code changes.
+> **Honest note on the demo DB:** writes (chat history, audit events, staged transfers) live for the life of a lambda instance and reset to seed state when it recycles. That is a deliberate demo trade-off — the persistence contract (Prisma models, audit chain, idempotency) is unchanged. A durable database (Postgres) requires a provider-compatible schema/client path that this build does not yet ship — tracked as roadmap work, not a config change.
 
 ## Honest scope notes
 
-- **Demo auth model**: sessions are server-side DB records with a random 192-bit bearer token (only its SHA-256 hash is stored); customers and officers get separate role-scoped sessions, every endpoint resolves the session from the token and rejects cross-session reads (403) and customer→officer mutations (403). It is deliberately simple, visible demo IAM — not production IAM: no OIDC, no MFA, no rotation.
-- **OTP is a mock SMS channel**: crypto-random 6-digit codes, bound to the staged intent, single-active (reissue invalidates), 5-minute expiry, 3-attempt lockout. The code renders in the UI only while `DEMO_MODE` is on (default on — set `DEMO_MODE=false` to simulate a real channel).
+- **Demo auth model**: sessions are server-side DB records with a random 192-bit bearer token (only its SHA-256 hash is stored); customers and officers get separate role-scoped sessions, every endpoint resolves the session from the token and rejects cross-session reads (403) and customer→officer mutations (403). It is deliberately simple, visible demo IAM — not production IAM: no OIDC, no MFA, no rotation. The demo identity picker is **disabled** in `DEPLOYMENT_MODE=operational` (fail-closed at boot AND at the login endpoint).
+- **OTP is a mock SMS channel**: crypto-random 6-digit codes, bound to the staged intent, single-active (reissue invalidates), 5-minute expiry, 3-attempt lockout, and **atomic single-use consumption** (two simultaneous submissions of the same code succeed exactly once — race-tested). The code renders in the UI only while the demo OTP reveal is on (default in demo mode). `DEMO_MODE=false` hides the code but does **not** create a delivery channel — in operational mode the transfer flow refuses to run unless a real provider is configured.
 - **Money is integer-cents**: every KES computation (fees, debits, balance checks, daily totals) goes through `src/lib/money.ts`; no bare float arithmetic on amounts anywhere in the transfer path.
-- **Approvals are idempotent**: the decision is claimed atomically (`updateMany where status:"open"`), the debit and its idempotency key are written in ONE transaction, and replaying a decided approval returns the original receipt (`replayed: true`) — a double-click can never double-debit.
+- **Transfers are atomic end-to-end**: balance sufficiency, the daily cap and the debit are enforced inside ONE transaction via a conditional `UPDATE … WHERE balance >= total` (row-locked), the idempotency record is written in the same transaction, and a concurrent same-key duplicate fails the unique constraint and rolls back. Race tests cover two intents competing for the last funds, two intents racing the daily cap, and same-key replay (`tests/transfer-race.test.ts`).
+- **Approvals are idempotent and attributed to the session**: the decision is claimed atomically (`updateMany where status:"open"`), and the recorded officer identity is **derived from the authenticated session** — a client-supplied name cannot rewrite the audit trail. A deliberate confirmation dialog repeats the exact transaction (source, beneficiary, amount, fee, total debit, irreversibility) before execution.
 - The mock core banking mirrors Co-opConnect shapes (message references, idempotency, statement/transfer services) with synthetic data; a thin adapter to their sandbox would slot in behind the same interface.
 - The reranker is a calibrated lexical proxy for a cross-encoder; the ranking contract (RRF fusion, answerability gate at 0.42) is identical to the production design.
-- The golden set ships 55 cases covering every intent × language × risk cell; the scaling path to ~300 is documented in the eval report.
+- **The eval gate is a deterministic CI gate, not a model-quality benchmark**: CI deliberately runs without an external model; the 55-case golden set measures routing, guardrail behaviour, refusal recall, fee numeric correctness and citation presence through the real orchestrator. It does not measure open-ended answer quality of an external LLM, and citation presence does not prove citation-to-claim faithfulness. The scaling path to ~300 cases is documented in the eval report.
+- **Audit is tamper-evident, not immutable**: the hash chain is recomputed on read over the newest ≤10,000 events and the UI states the verified coverage exactly. A privileged database writer could still rewrite history and recompute hashes — independent anchoring (signed checkpoints / append-only store) is roadmap work.
 - No LLM-as-judge is used in the harness — all checks are programmatic, so there is no judge variance to calibrate. If a judge is introduced, the method note specifies hand-labelling ~50 items and reporting Cohen's κ.
-- Security scans in CI (semgrep, bandit, trivy, pip/bun audit) are **informational** for this demo; lint, typecheck, tests, the eval gate and the production build are the enforced gates.
+- **Security scans are labelled**: blocking in CI = gitleaks (secrets), bandit, SBOM generation, helm lint/render; advisory (report-only) = semgrep, pip-audit, bun audit, trivy. Enforced quality gates = lint, typecheck, tests, the eval gate, the production build.

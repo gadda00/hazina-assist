@@ -8,10 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   AlertTriangle, BookOpen, Bot, ChevronRight, FileText, Loader2, Lock,
-  Send, ShieldAlert, ShieldCheck, Sparkles, User, Wrench, KeyRound, FileUp, Activity,
+  Send, ShieldAlert, ShieldCheck, Sparkles, User, Wrench, KeyRound, Activity, FlaskConical,
 } from "lucide-react";
 import type { ChatMessage, ChatResult, SessionInfo } from "@/lib/types";
 import { apiFetch } from "@/lib/client-api";
+import { TourBanner } from "@/components/hazina/tour-banner";
+import { advanceTourTo } from "@/lib/tour";
 
 const QUICK_PROMPTS: { label: string; text: string; tag?: string }[] = [
   { label: "M-Pesa fee (Sheng)", text: "nikituma 15k kwa mpesa kutoka coop, charges ni how much?" },
@@ -36,6 +38,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
   const [otpInput, setOtpInput] = useState("");
   const [otpDev, setOtpDev] = useState<string | null>(null);
   const [showTrace, setShowTrace] = useState(true);
+  const [tourTick, setTourTick] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -92,6 +95,12 @@ export function ChatView({ session }: { session: SessionInfo }) {
             result: d,
           },
         ]);
+        // guided tour advances on REAL results only (never timers)
+        if (d.kind === "fee_answer") advanceTourTo(2);
+        if (d.kind === "refused" || d.route === "guard") advanceTourTo(4);
+        if (d.kind === "otp_required") advanceTourTo(5);
+        if (d.kind === "transfer_pending_approval") advanceTourTo(6);
+        setTourTick((t) => t + 1);
       } catch {
         toast({ title: "Message failed", description: "The orchestrator could not process that.", variant: "destructive" });
       } finally {
@@ -128,9 +137,13 @@ export function ChatView({ session }: { session: SessionInfo }) {
   );
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  // the control journey for the last result: Ask → Ground → Check → Confirm →
+  // Human review → Record (deep-review product rec #2)
+  const journey = journeyFromResult(lastAssistant?.result);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
+      <TourBanner tick={tourTick} />
       <div className="grid lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-4">
         {/* ------------------------- Chat column ------------------------- */}
         <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm min-h-[70vh] max-h-[86vh] min-w-0">
@@ -150,7 +163,15 @@ export function ChatView({ session }: { session: SessionInfo }) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4">
+          {/* control journey strip — where the guardrails are right now */}
+          {journey && <ControlJourney stage={journey.stage} label={journey.label} />}
+
+          <div
+            className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4"
+            aria-live="polite"
+            aria-label="Conversation with Hazina Assistant"
+            role="log"
+          >
             {messages.length === 0 && (
               <div className="text-center py-10 px-4">
                 <Bot className="h-10 w-10 text-emerald-200 mx-auto mb-3" />
@@ -203,22 +224,29 @@ export function ChatView({ session }: { session: SessionInfo }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={otpDev ? "Enter the 6-digit code from your SMS…" : "Type a message — English, Kiswahili or Sheng…"}
+              aria-label={otpDev ? "OTP code entry" : "Message to Hazina Assistant"}
               className="flex-1"
               maxLength={500}
             />
-            <Button type="submit" disabled={busy || !input.trim()} className="bg-emerald-800 hover:bg-emerald-700">
+            <Button
+              type="submit"
+              disabled={busy || !input.trim()}
+              aria-label="Send message"
+              className="bg-emerald-800 hover:bg-emerald-700"
+            >
               <Send className="h-4 w-4" />
             </Button>
           </form>
           <div className="px-4 pb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            {/* fixed synthetic fixtures — NOT a real upload (deep-review P2-15) */}
             <span className="flex items-center gap-1">
-              <FileUp className="h-3.5 w-3.5" /> Payslip samples:
+              <FlaskConical className="h-3.5 w-3.5" aria-hidden /> Try a synthetic payslip sample (fixed demo fixture — no file upload):
             </span>
             <button onClick={() => processPayslip("clean")} disabled={busy} className="underline hover:text-emerald-700">clean digital</button>
             <button onClick={() => processPayslip("scanned")} disabled={busy} className="underline hover:text-emerald-700">scanned (OCR noise)</button>
             {otpDev && (
               <span className="ml-auto flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                <KeyRound className="h-3 w-3" /> demo SMS: <b>{otpDev}</b>
+                <KeyRound className="h-3 w-3" aria-hidden /> demo SMS: <b>{otpDev}</b>
               </span>
             )}
           </div>
@@ -291,8 +319,10 @@ function MessageBubble({
                 value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="6-digit code"
+                aria-label="One-time passcode from your SMS"
                 className="h-8 w-32 font-mono tracking-widest"
                 inputMode="numeric"
+                autoComplete="one-time-code"
               />
               <Button
                 size="sm"
@@ -300,6 +330,7 @@ function MessageBubble({
                 className="h-8 border-amber-300 text-amber-800 hover:bg-amber-100"
                 disabled={otpInput.length !== 6}
                 onClick={() => onOtpSubmit(otpInput)}
+                aria-label="Verify one-time passcode"
               >
                 Verify
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -414,9 +445,17 @@ function TracePanel({ session, last }: { session: SessionInfo; last?: Msg }) {
           <Activity className="h-4 w-4 text-emerald-700" />
           <span className="text-sm font-medium text-slate-800">Why this answer</span>
         </div>
+
+        {/* Layer 1 — plain-language reason (deep-review P2-16): what a
+            customer needs BEFORE the developer trace */}
+        <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
+          <div className="text-[10px] font-medium text-emerald-800 uppercase tracking-wide mb-1">in plain language</div>
+          <p className="text-[12px] text-slate-700 leading-relaxed">{plainReason(last)}</p>
+        </div>
+
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          The orchestrator is an explicit state machine. This panel shows the node-by-node decision
-          path for your last message — the same events that land on the hash-chained audit log.
+          The technical trace below shows the node-by-node decision path for your last message — the
+          same events that land on the hash-chained audit log.
         </p>
 
         {/* session context */}
@@ -515,4 +554,111 @@ function summariseDetail(node: string, d: Record<string, unknown>): string {
     default:
       return j.slice(0, 80) + "…";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Plain-language reason (P2-16) + control journey strip (product rec #2)
+// ---------------------------------------------------------------------------
+
+/** A one-sentence, customer-readable reason for the LAST answer — derived
+ *  from the structured result, never from model prose. */
+function plainReason(last?: Msg): string {
+  if (!last?.result) return "Send a message and I'll explain here exactly which rule, source or human checkpoint produced the answer.";
+  const r = last.result;
+  switch (r.kind) {
+    case "fee_answer":
+      return "I answered from the bank's tariff table: the fee was computed by a deterministic tool from the effective-dated tariff row (never guessed by the model), and the source is cited under the answer.";
+    case "rag_answer":
+      return `I grounded this answer in ${r.citations?.length ?? 0} cited section${(r.citations?.length ?? 0) === 1 ? "" : "s"} of the bank's documents, and a groundedness check ran on the reply before you saw it.`;
+    case "answer":
+      return "I read your account through a scoped read-only tool; the balance/statement came straight from the account record, not from the model.";
+    case "refused":
+      return "Your message looked like an attempt to override my instructions, so I refused it before any tool or model call. The refusal is recorded on the audit chain.";
+    case "handoff":
+      return "That question is outside my scope (banking policy, tariffs, your accounts, transfers), so I handed off instead of guessing. A human or the right channel can take it.";
+    case "otp_required":
+      return "You asked to move money, so I staged the request and raised a security step-up: a 6-digit code is required, and even then a bank officer must approve before anything is debited.";
+    case "transfer_pending_approval":
+      return "Your identity check passed and the signed intent is now with a bank officer. Money moves only after their approval — the model cannot execute transfers.";
+    case "transfer_policy_blocked":
+      return "A deterministic policy rule blocked this transfer (cap, limit or new-beneficiary cooling-off). This is a rule decision, not a model judgement.";
+    case "transfer_executed":
+      return "An officer approved this transfer; execution verified the signed intent and debited the account atomically, and the receipt is on the audit chain.";
+    case "loan_pack_ready":
+    case "idp_pack":
+      return "I extracted the payslip fields with per-field confidence and evidence, ran deterministic validation, and computed affordability — the pack now awaits a credit officer's recommendation.";
+    default:
+      return "This reply came from the orchestrated pipeline: guardrails ran first, then routing, then the answering path shown in the technical trace below.";
+  }
+}
+
+/** Control journey stage for the last result:
+ *  Ask → Ground → Check → Confirm → Human review → Record */
+type JourneyStage = "ask" | "ground" | "check" | "confirm" | "human" | "record";
+
+const JOURNEY_STAGES: { key: JourneyStage; label: string }[] = [
+  { key: "ask", label: "Ask" },
+  { key: "ground", label: "Ground" },
+  { key: "check", label: "Check" },
+  { key: "confirm", label: "Confirm" },
+  { key: "human", label: "Human review" },
+  { key: "record", label: "Record" },
+];
+
+function journeyFromResult(r?: ChatResult): { stage: JourneyStage; label: string } | null {
+  if (!r) return null;
+  switch (r.kind) {
+    case "fee_answer":
+    case "rag_answer":
+      return { stage: "ground", label: "Answer grounded in a cited source (fee computed by tool)" };
+    case "answer":
+      return { stage: "ground", label: "Account read through a scoped tool" };
+    case "refused":
+    case "handoff":
+      return { stage: "check", label: "Guardrail or scope check stopped this request" };
+    case "transfer_policy_blocked":
+      return { stage: "check", label: "Deterministic policy check blocked the transfer" };
+    case "otp_required":
+      return { stage: "confirm", label: "Step-up confirmation required (OTP)" };
+    case "transfer_pending_approval":
+      return { stage: "human", label: "Awaiting a human officer decision" };
+    case "transfer_executed":
+      return { stage: "record", label: "Executed after approval — receipt on the audit chain" };
+    case "loan_pack_ready":
+    case "idp_pack":
+      return { stage: "human", label: "Loan pack awaiting officer recommendation" };
+    default:
+      return { stage: "ask", label: "Ask — the journey starts here" };
+  }
+}
+
+function ControlJourney({ stage, label }: { stage: JourneyStage; label: string }) {
+  const activeIndex = JOURNEY_STAGES.findIndex((s) => s.key === stage);
+  return (
+    <div className="px-3 sm:px-4 py-2 border-b border-slate-100" aria-label="Control journey">
+      <div className="flex items-center gap-1 overflow-x-auto" role="list">
+        {JOURNEY_STAGES.map((s, i) => {
+          const done = i < activeIndex;
+          const active = i === activeIndex;
+          return (
+            <div key={s.key} role="listitem" className="flex items-center gap-1 shrink-0">
+              {i > 0 && <ChevronRight className={`h-3 w-3 ${done ? "text-emerald-500" : "text-slate-300"}`} aria-hidden />}
+              <span
+                className={`text-[10px] font-medium px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                  active
+                    ? "bg-emerald-700 text-white border-emerald-700"
+                    : done
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-slate-50 text-slate-400 border-slate-200"
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10px] text-slate-500 mt-1">{label}</div>
+    </div>
+  );
 }

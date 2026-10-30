@@ -1,27 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Activity, BadgeCheck, Ban, CheckCircle2, ClipboardCheck, FileSearch, FlaskConical,
-  Gauge, Link2, Loader2, Lock, RefreshCw, ShieldCheck, Users,
+  Gauge, Link2, Loader2, Lock, RefreshCw, ShieldCheck, Users, KeyRound,
 } from "lucide-react";
 import type {
   ApprovalTask, AuditEventView, EvalRunView, PayslipPackView, SessionInfo,
 } from "@/lib/types";
 import { apiFetch } from "@/lib/client-api";
+import { TourBanner } from "@/components/hazina/tour-banner";
+import { advanceTourTo } from "@/lib/tour";
 
 type ConsoleTab = "approvals" | "packs" | "audit" | "evals" | "monitor";
 
 export function OpsConsole({ session }: { session: SessionInfo }) {
   const [tab, setTab] = useState<ConsoleTab>("approvals");
+  // tour progress marker: bumping this re-renders the banner after decisions
+  const [tourTick, setTourTick] = useState(0);
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
+      <TourBanner tick={tourTick} />
       <div className="mb-4 flex items-center gap-2 flex-wrap">
         <Users className="h-5 w-5 text-emerald-800" />
         <h1 className="text-lg font-semibold text-slate-900">Operations console</h1>
@@ -48,13 +56,13 @@ export function OpsConsole({ session }: { session: SessionInfo }) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="approvals">
-          <ApprovalsTab />
+          <ApprovalsTab session={session} onDecided={() => setTourTick((t) => t + 1)} />
         </TabsContent>
         <TabsContent value="packs">
-          <PacksTab />
+          <PacksTab session={session} />
         </TabsContent>
         <TabsContent value="audit">
-          <AuditTab sessionId={session.session.id} />
+          <AuditTab sessionId={session.session.id} onVerified={() => setTourTick((t) => t + 1)} />
         </TabsContent>
         <TabsContent value="evals">
           <EvalsTab />
@@ -71,13 +79,20 @@ export function OpsConsole({ session }: { session: SessionInfo }) {
 // Approvals — HITL queue for transfers
 // ---------------------------------------------------------------------------
 
-function ApprovalsTab() {
+function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided: () => void }) {
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ApprovalTask[]>([]);
   const [packs, setPacks] = useState<PayslipPackView[]>([]);
-  const [officer, setOfficer] = useState("Officer Njeri");
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  // deliberate final confirmation state (deep-review P2-14): the exact
+  // transaction summary must be confirmed before execution can happen
+  const [confirming, setConfirming] = useState<
+    | { task: ApprovalTask; decision: "approve" | "reject"; reason?: string }
+    | null
+  >(null);
+
+  const officerName = session.customer.name; // server-derived identity — read-only
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,23 +110,13 @@ function ApprovalsTab() {
   }, [load]);
 
   const decide = useCallback(
-    async (taskId: string, decision: "approve" | "reject") => {
-      let reason: string | undefined;
-      if (decision === "reject") {
-        // required rejection reason — recorded on the task + audit chain
-        reason = window.prompt("Rejection reason (required — recorded on the audit chain):") ?? "";
-        if (!reason.trim()) {
-          toast({ title: "Rejection reason required", description: "The audit chain records WHY a task was declined.", variant: "destructive" });
-          return;
-        }
-        reason = reason.trim();
-      }
+    async (taskId: string, decision: "approve" | "reject", reason?: string) => {
       setActing(taskId + decision);
       try {
         const res = await apiFetch("/api/approvals", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ taskId, decision, officer, reason }),
+          body: JSON.stringify({ taskId, decision, reason }),
         });
         const d = await res.json();
         if (d.ok) {
@@ -123,6 +128,9 @@ function ApprovalsTab() {
                 ? `txn ${d.txnRef} · fee KES ${d.feeKes} · idempotency ${d.messageRef?.slice(0, 12)}…`
                 : "The customer is notified; the audit chain records your decision.",
           });
+          // guided tour: a real decision just landed → step 7 → 8
+          advanceTourTo(8);
+          onDecided();
         } else {
           toast({ title: "Execution rejected by controls", description: `reason: ${d.reason}`, variant: "destructive" });
         }
@@ -133,7 +141,26 @@ function ApprovalsTab() {
         setActing(null);
       }
     },
-    [load, officer, toast]
+    [load, onDecided, toast]
+  );
+
+  /** P2-14: every transfer decision routes through a confirmation dialog
+   *  repeating source, beneficiary, destination, amount, fee, total debit and
+   *  the irreversibility of executing. Reject requires a recorded reason. */
+  const requestDecision = useCallback(
+    (task: ApprovalTask, decision: "approve" | "reject") => {
+      if (decision === "reject") {
+        const reason = window.prompt("Rejection reason (required — recorded on the audit chain):") ?? "";
+        if (!reason.trim()) {
+          toast({ title: "Rejection reason required", description: "The audit chain records WHY a task was declined.", variant: "destructive" });
+          return;
+        }
+        setConfirming({ task, decision, reason: reason.trim() });
+        return;
+      }
+      setConfirming({ task, decision });
+    },
+    [toast]
   );
 
   const open = tasks.filter((t) => t.status === "open");
@@ -156,8 +183,13 @@ function ApprovalsTab() {
             Transfers execute only after signature, expiry &amp; nonce verification.
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">acting as</span>
-            <Input value={officer} onChange={(e) => setOfficer(e.target.value)} className="h-8 w-44" />
+            {/* server-derived identity: read-only, from the officer session —
+                the audit chain records THIS identity, never a typed name */}
+            <span className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 rounded-full px-2.5 py-1 bg-slate-50">
+              <Lock className="h-3 w-3 text-emerald-700" aria-hidden />
+              acting as <b className="text-slate-700">{officerName}</b>
+              <span className="text-slate-400">(from session)</span>
+            </span>
             <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </Button>
@@ -222,17 +254,17 @@ function ApprovalsTab() {
                     size="sm"
                     className="bg-emerald-700 hover:bg-emerald-600 gap-1.5"
                     disabled={!!acting}
-                    onClick={() => decide(t.id, "approve")}
+                    onClick={() => requestDecision(t, "approve")}
                   >
                     {acting === t.id + "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
-                    Approve &amp; execute
+                    {t.type === "transfer" ? "Approve & execute…" : "Record recommendation…"}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="border-red-300 text-red-700 hover:bg-red-50 gap-1.5"
                     disabled={!!acting}
-                    onClick={() => decide(t.id, "reject")}
+                    onClick={() => requestDecision(t, "reject")}
                   >
                     {acting === t.id + "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                     Reject
@@ -269,7 +301,125 @@ function ApprovalsTab() {
           ))}
         </div>
       )}
+
+      {/* ------- deliberate final confirmation (deep-review P2-14) ------- */}
+      {confirming && (
+        <ConfirmDecisionDialog
+          task={confirming.task}
+          decision={confirming.decision}
+          reason={confirming.reason}
+          officerName={officerName}
+          busy={!!acting}
+          onCancel={() => setConfirming(null)}
+          onConfirm={(reason) => {
+            const c = confirming;
+            setConfirming(null);
+            decide(c.task.id, c.decision, reason);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Final confirmation of the EXACT action (P2-14): source, beneficiary,
+ *  destination, amount, fee, total debit, irreversibility — with an explicit
+ *  confirm verb and a visually distinct cancel. */
+function ConfirmDecisionDialog({
+  task, decision, reason, officerName, busy, onCancel, onConfirm,
+}: {
+  task: ApprovalTask;
+  decision: "approve" | "reject";
+  reason?: string;
+  officerName: string;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (reason?: string) => void;
+}) {
+  const p = task.payload as {
+    customer?: string; fromAccount?: string; beneficiary?: string; destination?: string;
+    destinationType?: string; amountKes?: number; purpose?: string;
+  };
+  const isTransfer = task.type === "transfer";
+  const amount = Number(p.amountKes ?? 0);
+  // fee preview for the confirmation summary: shown from the tariff table by
+  // band (the executor computes the authoritative fee atomically at debit)
+  const feePreview =
+    isTransfer && p.destinationType === "mpesa"
+      ? amount > 70_000 ? 75 : amount > 35_000 ? 52 : amount > 10_000 ? 23 : amount > 1_000 ? 11 : 0
+      : isTransfer && p.destinationType === "pesalink"
+        ? amount > 150_000 ? 205 : amount > 10_000 ? 110 : 35
+        : 0;
+  const approve = decision === "approve";
+
+  return (
+    <AlertDialog open onOpenChange={(o) => !o && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            {approve ? (
+              <>
+                <KeyRound className="h-5 w-5 text-emerald-700" aria-hidden />
+                {isTransfer ? "Confirm and execute transfer" : "Record officer recommendation"}
+              </>
+            ) : (
+              <>
+                <Ban className="h-5 w-5 text-red-600" aria-hidden />
+                Confirm rejection
+              </>
+            )}
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              {isTransfer ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px]">
+                    <span className="text-slate-500">from</span>
+                    <span className="font-mono text-slate-800">{p.fromAccount} ({p.customer})</span>
+                    <span className="text-slate-500">to</span>
+                    <span className="text-slate-800"><b>{p.beneficiary}</b> <span className="font-mono text-xs">{String(p.destination)}</span> via {String(p.destinationType).toUpperCase()}</span>
+                    <span className="text-slate-500">amount</span>
+                    <span className="font-mono text-slate-800">KES {amount.toLocaleString()}</span>
+                    <span className="text-slate-500">fee</span>
+                    <span className="font-mono text-slate-800">KES {feePreview.toLocaleString()}<span className="text-slate-400"> (tariff band)</span></span>
+                    <span className="text-slate-500">total debit</span>
+                    <span className="font-mono font-semibold text-slate-900">KES {(amount + feePreview).toLocaleString()}</span>
+                    {p.purpose && <><span className="text-slate-500">purpose</span><span className="text-slate-800">{p.purpose}</span></>}
+                  </div>
+                  {approve && (
+                    <p className="text-[12px] text-red-700 pt-1">
+                      This action is final: the core API debits the account immediately and the transfer
+                      cannot be reversed from this console.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p>
+                  Record the officer recommendation on this loan pre-qualification pack. This is a
+                  <b> recommendation for the lending process</b> — no lending decision or disbursement
+                  happens here.
+                </p>
+              )}
+              <p className="text-[12px] text-slate-500">
+                Recorded as <b>{officerName}</b> (from your authenticated session — not editable) and
+                hash-chained to the audit log.
+                {reason ? ` Reason: “${reason}”.` : approve ? "" : ""}
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => onConfirm(reason)}
+            disabled={busy}
+            className={approve ? "bg-emerald-700 hover:bg-emerald-600" : "bg-red-600 hover:bg-red-500"}
+          >
+            {approve ? (isTransfer ? "Execute transfer" : "Record recommendation") : "Confirm rejection"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -286,7 +436,7 @@ function RiskBadge({ risk }: { risk: string }) {
 // Loan packs — payslip extraction evidence + officer decision
 // ---------------------------------------------------------------------------
 
-function PacksTab() {
+function PacksTab({ session }: { session: SessionInfo }) {
   const { toast } = useToast();
   const [packs, setPacks] = useState<PayslipPackView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -307,6 +457,12 @@ function PacksTab() {
 
   const decidePack = useCallback(
     async (packId: string, decision: "approve" | "reject") => {
+      const confirmed = window.confirm(
+        decision === "approve"
+          ? `Record a recommendation to APPROVE this loan pre-qualification pack as ${session.customer.name}? This records the officer recommendation — no lending decision or disbursement happens here.`
+          : `Record a recommendation to DECLINE this pack as ${session.customer.name}? The customer will be notified; the decision lands on the audit chain.`
+      );
+      if (!confirmed) return;
       // find the approval task tied to this pack
       const d = await apiFetch("/api/approvals").then((r) => r.json());
       const task = (d.tasks as ApprovalTask[]).find((t) => t.type === "loan_pack" && t.refId === packId && t.status === "open");
@@ -317,15 +473,16 @@ function PacksTab() {
       await apiFetch("/api/approvals", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ taskId: task.id, decision, officer: "Officer Njeri (Credit)" }),
+        // no `officer` field: the server derives the actor from the session
+        body: JSON.stringify({ taskId: task.id, decision }),
       });
       toast({
-        title: decision === "approve" ? "Loan recommended to approval" : "Loan declined",
-        description: "The AI recommended; the officer decided — DPA s.35 compliant.",
+        title: decision === "approve" ? "Officer recommendation recorded: proceed" : "Officer recommendation recorded: decline",
+        description: "Recommendation only — the lending decision and disbursement happen outside this demo. Recorded on the audit chain.",
       });
       load();
     },
-    [load, toast]
+    [load, session.customer.name, toast]
   );
 
   if (loading) {
@@ -352,7 +509,8 @@ function PacksTab() {
           Extraction carries <b>per-field confidence</b> and the <b>source span</b> (evidence) from the
           document. Validation is deterministic (KRA PIN format, net ≤ gross, deductions reconcile,
           Employment Act one-third rule). Affordability is a computation, not a judgement. The system
-          <b> recommends, never decides</b> — the credit officer clicks the final action.
+          <b> recommends, never decides</b>: the credit officer records a <b>recommendation</b> for the
+          lending process — no lending decision or disbursement happens in this demo.
         </CardContent>
       </Card>
       {packs.map((p) => (
@@ -372,7 +530,11 @@ function PacksTab() {
                           : "border-amber-300 bg-amber-50 text-amber-700"
                     }
                   >
-                    {p.status.replace(/_/g, " ")}
+                    {p.status === "approved"
+                      ? "officer recommended: proceed"
+                      : p.status === "declined"
+                        ? "officer recommended: decline"
+                        : p.status.replace(/_/g, " ")}
                   </Badge>
                   <span className="text-[11px] text-slate-400 font-mono">{p.fileName}</span>
                 </div>
@@ -381,10 +543,10 @@ function PacksTab() {
               {p.status === "awaiting_review" && (
                 <div className="flex gap-2">
                   <Button size="sm" className="bg-emerald-700 hover:bg-emerald-600 gap-1.5" onClick={() => decidePack(p.id, "approve")}>
-                    <BadgeCheck className="h-4 w-4" /> Recommend approve
+                    <BadgeCheck className="h-4 w-4" /> Recommend proceed
                   </Button>
                   <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-50 gap-1.5" onClick={() => decidePack(p.id, "reject")}>
-                    <Ban className="h-4 w-4" /> Decline
+                    <Ban className="h-4 w-4" /> Recommend decline
                   </Button>
                 </div>
               )}
@@ -471,10 +633,16 @@ function PacksTab() {
 // Audit chain viewer + verification
 // ---------------------------------------------------------------------------
 
-function AuditTab({ sessionId }: { sessionId: string }) {
+function AuditTab({ sessionId, onVerified }: { sessionId: string; onVerified: () => void }) {
   const { toast } = useToast();
   const [events, setEvents] = useState<AuditEventView[]>([]);
-  const [verification, setVerification] = useState<{ ok: boolean; brokenAt: number | null; totalEvents: number } | null>(null);
+  const [verification, setVerification] = useState<{
+    ok: boolean;
+    brokenAt: number | null;
+    verifiedEvents?: number;
+    totalEventsInDb?: number;
+    coverage?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterSession, setFilterSession] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -486,10 +654,15 @@ function AuditTab({ sessionId }: { sessionId: string }) {
       const d = await apiFetch(url).then((r) => r.json());
       setEvents(d.events ?? []);
       setVerification(d.verification ?? null);
+      // guided tour: chain verified → final step complete
+      if (d.verification?.ok) {
+        advanceTourTo(9);
+        onVerified();
+      }
     } finally {
       setLoading(false);
     }
-  }, [filterSession, sessionId]);
+  }, [filterSession, onVerified, sessionId]);
 
   useEffect(() => {
     load();
@@ -508,12 +681,20 @@ function AuditTab({ sessionId }: { sessionId: string }) {
             <div>
               <div className="font-medium text-slate-900">
                 {verification?.ok
-                  ? `Hash chain intact — ${verification.totalEvents} events verified`
+                  ? `Hash chain intact — ${verification.verifiedEvents ?? verification.totalEventsInDb ?? 0} events verified`
                   : `CHAIN BROKEN at event #${verification?.brokenAt}`}
               </div>
               <div className="text-xs text-slate-500">
                 Every event is SHA-256 chained to its predecessor (prev_hash + payload → hash).
                 Recomputed on every read — tampering breaks the chain.
+              </div>
+              {/* verified-range honesty (P2-9): say exactly what was checked */}
+              <div className="text-[11px] mt-0.5 text-slate-400">
+                {verification?.coverage === "full-history"
+                  ? `verified coverage: full history (${verification.verifiedEvents} of ${verification.totalEventsInDb} events)`
+                  : verification?.coverage
+                    ? `verified coverage: ${verification.coverage} — ${verification.verifiedEvents} of ${verification.totalEventsInDb} events in the table. Tamper-evident within the verified range; not immutable storage (see threat model).`
+                    : ""}
               </div>
             </div>
           </div>
@@ -716,9 +897,32 @@ function BarRow({ label, total, passed }: { label: string; total: number; passed
 // Monitoring — live SLO/metrics from /api/metrics + /api/health
 // ---------------------------------------------------------------------------
 
+type HealthInfo = { status: string; dependencies: Record<string, unknown> };
+
+/** Safe renderer for dependency values — the health endpoint mixes strings
+ *  ("ok", "local-fallback") with objects ({ok, auditEvents, error?}). Rendering
+ *  an object directly would crash React 19 ("Objects are not valid as a React
+ *  child") and blank the whole console, so normalise everything to text. */
+const depLabel = (v: unknown): string => {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as { ok?: boolean; auditEvents?: number; error?: string };
+    if (o.ok === true) return `ok · ${o.auditEvents ?? 0} audit events`;
+    if (o.ok === false) return o.error ? `degraded — ${o.error}` : "degraded";
+    return JSON.stringify(v);
+  }
+  return String(v);
+};
+
+const depOk = (v: unknown): boolean => {
+  if (typeof v === "string") return v === "ok";
+  if (v && typeof v === "object") return (v as { ok?: boolean }).ok === true;
+  return false;
+};
+
 function MonitorTab() {
   const [metrics, setMetrics] = useState<Record<string, string> | null>(null);
-  const [health, setHealth] = useState<{ status: string; dependencies: Record<string, string>; counts: Record<string, number> } | null>(null);
+  const [health, setHealth] = useState<HealthInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -791,9 +995,9 @@ function MonitorTab() {
               <CardContent className="p-4 space-y-2">
                 <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">dependencies</div>
                 {health && Object.entries(health.dependencies).map(([k, v]) => (
-                  <div key={k} className="flex justify-between text-[11px]">
+                  <div key={k} className="flex justify-between text-[11px] gap-2">
                     <span className="text-slate-500">{k}</span>
-                    <span className={`font-mono ${v === "ok" ? "text-emerald-600" : "text-amber-600"}`}>{v}</span>
+                    <span className={`font-mono text-right ${depOk(v) ? "text-emerald-600" : "text-amber-600"}`}>{depLabel(v)}</span>
                   </div>
                 ))}
               </CardContent>

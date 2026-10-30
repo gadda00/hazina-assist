@@ -12,6 +12,7 @@ import { signIntent, verifyIntent, checkTransferPolicy, DEFAULT_LIMITS } from "@
 import { gatewayChat } from "@/lib/gateway";
 import { appendEvent } from "@/lib/audit";
 import { coreTransfer } from "@/lib/banking";
+import { isDemo, otpRevealEnabled } from "@/lib/deployment";
 import { randomUUID, randomInt } from "node:crypto";
 import { toCents, parseAmountKes as normaliseAmount } from "@/lib/money";
 import { z } from "zod";
@@ -236,17 +237,19 @@ export async function policyGate(sessionId: string, p: TransferProposal): Promis
 //
 // Cryptographically random code, bound to the staged intent, single-active
 // (a new issuance consumes every earlier code), 5-minute expiry, 3-attempt
-// lockout. The code is only ever returned to the client when DEMO_MODE is
-// enabled (default on — this is a demo; set DEMO_MODE=false to hide it).
+// lockout. The code is only ever returned to the client when the demo OTP
+// reveal is enabled (demo mode default; DEMO_MODE=false hides it — and in
+// operational mode transfers refuse to run at all without a real delivery
+// provider, see src/lib/deployment.ts — hiding a code is NOT an SMS).
 // ---------------------------------------------------------------------------
 
 export const OTP_TTL_MS = 5 * 60_000;
 export const OTP_MAX_ATTEMPTS = 3;
 
+/** Demo OTP reveal: the 6-digit code is shown in the chat UI as the
+ *  synthetic "SMS channel". Demo mode only — never in operational mode. */
 export function demoMode(): boolean {
-  // Demo-first default: the synthetic SMS card is the demo's OTP channel.
-  // DEMO_MODE=false hides the code (a real deployment would send SMS).
-  return process.env.DEMO_MODE !== "false";
+  return otpRevealEnabled();
 }
 
 export async function issueOtp(sessionId: string): Promise<{ code: string; expiresAt: Date }> {
@@ -287,7 +290,14 @@ export async function verifyOtp(sessionId: string, code: string): Promise<{ ok: 
     await db.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
     return { ok: false, reason: "otp_wrong" };
   }
-  await db.otpCode.update({ where: { id: otp.id }, data: { consumed: true } });
+  // ATOMIC consumption: the conditional update claims the code exactly once,
+  // so two simultaneous submissions of the same valid code can never both
+  // pass (deep-review P1: step-up races).
+  const consumed = await db.otpCode.updateMany({
+    where: { id: otp.id, consumed: false },
+    data: { consumed: true },
+  });
+  if (consumed.count !== 1) return { ok: false, reason: "otp_already_used" };
   await db.pendingAction.deleteMany({ where: { sessionId, kind: "otp_wait" } });
   return { ok: true };
 }
@@ -296,7 +306,17 @@ export async function verifyOtp(sessionId: string, code: string): Promise<{ ok: 
 // Signed intent + HITL staging
 // ---------------------------------------------------------------------------
 
-const INTENT_SECRET = process.env.HAZINA_INTENT_SECRET ?? "dev-only-secret-rotate-me";
+/** HMAC key for intent signing. In demo mode a development fallback keeps
+ *  the synthetic flow runnable; in operational mode a missing/known-default
+ *  secret is a hard error (fail-closed — deep-review P0-3). */
+const INTENT_SECRET = (() => {
+  const s = process.env.HAZINA_INTENT_SECRET;
+  if (s && s.trim()) return s;
+  if (isDemo()) return "dev-only-secret-rotate-me";
+  throw new Error(
+    "[hazina] HAZINA_INTENT_SECRET is required in operational mode (refusing to sign intents with a development secret)"
+  );
+})();
 
 /** Staged pending-action payload — schema-validated, never `as never`. */
 const StagedIntentSchema = z.object({

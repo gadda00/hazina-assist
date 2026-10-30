@@ -21,13 +21,28 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: intent-secret
+            - name: HAZINA_METRICS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: metrics-scrape-token
             - name: CATEGORISER_URL
               value: {{ .Values.app.env.CATEGORISER_URL | quote }}
+          # readiness = can serve requests (DB reachable);
+          # liveness = process alive only — a dependency hiccup must not
+          # trigger a restart loop (deep-review P2-13)
           readinessProbe:
-            httpGet: { path: /api/health, port: {{ .Values.app.port }} }
+            httpGet:
+              path: /api/health?probe=ready
+              port: {{ .Values.app.port }}
             initialDelaySeconds: 10
+            periodSeconds: 10
           livenessProbe:
-            httpGet: { path: /api/health, port: {{ .Values.app.port }} }}
+            httpGet:
+              path: /api/health?probe=live
+              port: {{ .Values.app.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 30
           resources: {{ toYaml .Values.resources.app | nindent 12 }}
 ---
 apiVersion: apps/v1

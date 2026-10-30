@@ -59,10 +59,12 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
 
 | Variable | Effect |
 |---|---|
-| `HAZINA_INTENT_SECRET` | Real HMAC secret for signing transfer intents. Unset → a `dev-only-secret-rotate-me` placeholder is used (fine for the demo; the point is the signing architecture, not the secret). |
-| `DEMO_MODE` | `true` (default) shows the OTP code in the chat UI's demo SMS card — the demo's OTP channel. `false` hides it (simulates a real SMS delivery). |
+| `HAZINA_INTENT_SECRET` | Real HMAC secret for signing transfer intents. Unset in demo mode → a `dev-only-secret-rotate-me` placeholder is used (fine for the demo; the point is the signing architecture, not the secret). **Operational mode fails closed without a real ≥32-char value** (`src/lib/deployment.ts`). |
+| `DEMO_MODE` | `true` (default) shows the OTP code in the chat UI's demo SMS card — the demo's OTP channel. `false` **hides** it; it does **not** configure real SMS delivery (see `DEPLOYMENT_MODE`). |
+| `DEPLOYMENT_MODE` | `demo` (default) or `operational`. Operational mode **refuses to boot** unless the production preconditions hold (real signing secret, `DEMO_MODE=false`, OTP delivery provider) and the demo identity picker is disabled outright — this build ships demo IAM only. |
+| `HAZINA_METRICS_TOKEN` | Dedicated read-only Prometheus scrape token for `/api/metrics` (self-hosted stacks; see §3). |
 | `MODEL_TIMEOUT_MS` | Deadline for external model calls before fallback (default `6000`). |
-| `DATABASE_URL` | **Leave unset for the demo.** Set a Postgres URL for a persistent, production-shaped deployment — non-file URLs pass through untouched (`src/lib/db.ts`). |
+| `DATABASE_URL` | **Leave unset for the demo (SQLite).** Note: this build is **SQLite-only** — a Postgres URL will not work without a Postgres schema/client path (roadmap; see the honesty note below). |
 
 ### Troubleshooting
 
@@ -72,7 +74,7 @@ Nothing else is required. The repo carries a `vercel.json` that wires:
 | Deploy fails with a plan/region error | A `regions` entry in `vercel.json` needs Pro+. Region is a dashboard setting instead — see above. |
 | The URL isn't `hazina-assist-pfb8.vercel.app` | Vercel appended a suffix (project name taken) or you renamed the project. Update the `#liveapp` href in `docs/index.html` and the links in `README.md`. |
 | Answers feel canned / model says `deterministic-fallback` | Expected with no model credentials on Vercel — the designed degradation path (ADR-001), asserted by the CI eval gate. |
-| Demo data resets | The `/tmp` DB lives per serverless instance — documented demo posture; set a Postgres `DATABASE_URL` for persistence. |
+| Demo data resets | The `/tmp` DB lives per serverless instance — documented demo posture. A durable database needs the Postgres provider path (roadmap — this build ships SQLite only). |
 
 ### Verified before every push
 
@@ -104,5 +106,52 @@ links to the live Vercel app.
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Brings up the app, the FastAPI categoriser, Prometheus (scrapes
-`/api/metrics`) and Grafana. A Helm chart for Kubernetes is in `deploy/helm/`.
+Brings up the app, the FastAPI categoriser, Prometheus and Grafana.
+
+**Database: SQLite only.** The compose stack mounts the `appdata` volume at
+`/app/db` so the SQLite file persists across container restarts. A Postgres
+service was removed from this stack because the current Prisma schema/client
+target SQLite — advertising a Postgres path that cannot work would be
+misleading. Postgres support is roadmap work (schema + migrations + client
+generation + CI matrix), not a `DATABASE_URL` swap.
+
+**Mode: demo by default.** The stack boots in `DEPLOYMENT_MODE=demo`
+(synthetic data, demo identity picker, OTP code revealed). For anything
+shared or persistent, set a real `HAZINA_INTENT_SECRET`
+(`openssl rand -hex 32`). `DEPLOYMENT_MODE=operational` is deliberately
+unusable in this build: it fails closed at startup (no real IdP is
+integrated; no OTP delivery provider ships) — see `src/lib/deployment.ts`.
+
+**Metrics scraping is authenticated.** `/api/metrics` accepts either an
+officer session (ops console) or a dedicated scrape token:
+
+```bash
+# 1. generate a token and export it to BOTH sides
+export HAZINA_METRICS_TOKEN=$(openssl rand -hex 16)
+# 2. put the SAME token into deploy/prometheus.yml → authorization.credentials
+#    (the checked-in value is a dev default, safe only for localhost demos)
+# 3. restart: docker compose -f deploy/docker-compose.yml up -d
+```
+
+Rotation is a coordinated env change on both sides; Prometheus gets HTTP 401
+until the tokens match — that failure is the alert, not a bug.
+
+**Helm (Kubernetes).** `helm lint` and `helm template` run as a **blocking CI
+job**, so the chart always renders. Before installing:
+
+```bash
+# required secret (never commit real values):
+kubectl create secret generic hazina-secrets \
+  --from-literal=intent-secret=$(openssl rand -hex 32) \
+  --from-literal=metrics-scrape-token=$(openssl rand -hex 16)
+
+# build + publish the two images to your registry, then update
+# deploy/helm/values.yaml image repositories/tags, then:
+helm install hazina deploy/helm
+```
+
+Readiness uses `/api/health?probe=ready` (DB reachable); liveness uses
+`?probe=live` (process alive — a dependency hiccup will not restart-loop the
+pod). This chart is a **render-verified scaffold**: image publication, DB
+provisioning and a clean-cluster smoke test are the operator's setup steps
+above — treat it as a starting point, not a turnkey production release.

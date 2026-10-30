@@ -2,10 +2,19 @@ import { NextResponse } from "next/server";
 import { getChain } from "@/lib/audit";
 import { verifyChain } from "@hazina/kit";
 import { requireDemoOfficer } from "@/lib/authz";
+import { db } from "@/lib/db";
 import { ERR, reqId } from "@/lib/schemas";
 
 /** GET /api/audit?sessionId=&limit= — hash-chained audit viewer + chain proof.
- *  Officer-only (audit is console surface, not customer surface). */
+ *  Officer-only (audit is console surface, not customer surface).
+ *
+ *  VERIFIED RANGE HONESTY (deep-review P2-9): verification recomputes the
+ *  chain over the newest ≤10,000 events, and the response says exactly that —
+ *  `coverage` is "full-history" only when every event in the table was
+ *  checked, otherwise "suffix-window" with both counts. The chain is
+ *  tamper-evident within the verified range; it is NOT immutable storage —
+ *  a privileged DB writer could still rewrite history and recompute hashes.
+ *  Anchoring to independent storage is future work (see threat-model). */
 export async function GET(req: Request) {
   const auth = await requireDemoOfficer(req);
   if (!auth.ok) return auth.response;
@@ -25,6 +34,8 @@ export async function GET(req: Request) {
     const verification = verifyChain(
       all.map((r) => ({ payload: r.payload, prevHash: r.prevHash, hash: r.hash }))
     );
+    const totalInDb = await db.auditEvent.count();
+    const verifiedCount = verification.length;
 
     return NextResponse.json({
       events: rows.map((r) => ({
@@ -40,7 +51,9 @@ export async function GET(req: Request) {
       verification: {
         ok: verification.ok,
         brokenAt: verification.brokenAt,
-        totalEvents: verification.length,
+        verifiedEvents: verifiedCount,
+        totalEventsInDb: totalInDb,
+        coverage: verifiedCount >= totalInDb ? "full-history" : "suffix-window (newest 10,000)",
         checkedAt: new Date().toISOString(),
       },
     });

@@ -29,7 +29,8 @@ export const ChatGetSchema = z.object({
 export const ApprovalPostSchema = z.object({
   taskId: z.string().min(1).max(64),
   decision: z.enum(["approve", "reject"]),
-  officer: z.string().min(1).max(80).optional(),
+  // `officer` was removed (deep-review P1-7): the recorded actor is derived
+  // from the authenticated officer session server-side, never from input.
   reason: z.string().min(1).max(500).optional(),
 });
 

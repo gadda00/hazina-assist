@@ -93,9 +93,29 @@ jobs:
       - run: pip install jsonschema
       - run: python3 scripts/check-vercel-config.py
 
+  # Helm chart must RENDER before it can be called a deployment path
+  # (deep-review P1-6): lint + template are blocking — a stray brace or a
+  # missing values key fails the check instead of failing at install time.
+  helm-lint:
+    name: helm lint + template [blocking]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: helm lint
+        run: helm lint deploy/helm
+      - name: helm template (render check)
+        run: helm template hazina-ci deploy/helm > /dev/null
+
   # -------------------------------------------------------------------- security
+  # NOTE (deep-review P2-12): of the security checks below, only gitleaks
+  # (secret-scan) and bandit are BLOCKING. semgrep / pip-audit / bun-audit /
+  # trivy are ADVISORY (report-only, `|| true`) — they surface findings for
+  # review without failing the PR. Job names label each as such.
   secret-scan:
-    name: gitleaks (secrets)
+    name: gitleaks (secrets) [blocking]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,22 +126,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   static-analysis:
-    name: semgrep + bandit
+    name: semgrep [advisory] + bandit [blocking]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: semgrep (app + kit)
+      - name: semgrep (app + kit) — advisory, report-only
         run: |
           pip install semgrep
           semgrep scan --config auto --error \
-            src packages/hazina-kit/src || true   # report; tighten to --error once baseline is set
-      - name: bandit (categoriser)
+            src packages/hazina-kit/src || true   # findings reviewed manually; baseline TBD
+      - name: bandit (categoriser) — blocking
         run: |
           pip install bandit
           bandit -r services/categoriser/main.py -ll
 
   dependency-audit:
-    name: pip-audit + bun audit
+    name: pip-audit + bun audit [advisory]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,14 +151,14 @@ jobs:
       - run: pip install pip-audit && pip-audit -r services/categoriser/requirements.txt || true
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile || bun install
-      - run: bunx better-npm-audit audit || true   # report in demo; enforce in production
+      - run: bunx better-npm-audit audit || true   # advisory: findings triaged manually
 
   container-scan:
-    name: trivy + SBOM
+    name: trivy [advisory] + SBOM [blocking artifact]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Trivy filesystem scan
+      - name: Trivy filesystem scan — advisory
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
           trivy fs --severity HIGH,CRITICAL --exit-code 0 . || true

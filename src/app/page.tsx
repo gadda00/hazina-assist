@@ -5,10 +5,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Shield, Landmark, MessageSquare, Users, Loader2, LogOut, Lock, UserCog } from "lucide-react";
+import { Shield, Landmark, MessageSquare, Users, Loader2, LogOut, Lock, UserCog, Map } from "lucide-react";
 import { ChatView } from "@/components/hazina/chat-view";
 import { OpsConsole } from "@/components/hazina/ops-console";
 import { apiFetch, setApiToken } from "@/lib/client-api";
+import { startTour } from "@/lib/tour";
 import type { SessionInfo } from "@/lib/types";
 
 type View = "chat" | "console";
@@ -21,17 +22,24 @@ export default function Home() {
   >([]);
   const [officers, setOfficers] = useState<{ id: string; name: string; role: string }[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [directoryEmpty, setDirectoryEmpty] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [loggingIn, setLoggingIn] = useState<string | null>(null);
 
   const loadDirectory = useCallback(async () => {
     setLoadError(false);
+    setDirectoryEmpty(false);
     try {
       const r = await fetch("/api/auth/login");
       if (!r.ok) throw new Error("bad status");
       const d = await r.json();
       setCustomers(d.customers ?? []);
       setOfficers(d.officers ?? []);
+      // Loaded fine but zero rows → the DB schema exists but was never seeded.
+      // Surface the exact fix instead of an infinite "loading…" spinner.
+      if ((d.customers ?? []).length === 0 && (d.officers ?? []).length === 0) {
+        setDirectoryEmpty(true);
+      }
     } catch {
       setLoadError(true);
       toast({ title: "Could not load demo directory", description: "Retry in a moment.", variant: "destructive" });
@@ -43,7 +51,7 @@ export default function Home() {
   }, [loadDirectory]);
 
   const login = useCallback(
-    async (customerId: string, as: "customer" | "officer" = "customer") => {
+    async (customerId: string, as: "customer" | "officer" = "customer", opts?: { tour?: boolean }) => {
       setLoggingIn(customerId + as);
       try {
         const res = await fetch("/api/auth/login", {
@@ -56,6 +64,7 @@ export default function Home() {
         setApiToken(d.session.token);
         setSession(d as SessionInfo);
         setView(as === "officer" ? "console" : "chat");
+        if (opts?.tour) startTour();
         toast({
           title:
             as === "officer"
@@ -175,9 +184,19 @@ export default function Home() {
                       </div>
                     </button>
                   ))}
-                  {customers.length === 0 && !loadError && (
+                  {customers.length === 0 && !loadError && !directoryEmpty && (
                     <div className="flex items-center gap-2 text-emerald-300 text-sm">
                       <Loader2 className="h-4 w-4 animate-spin" /> loading customers…
+                    </div>
+                  )}
+                  {directoryEmpty && (
+                    <div className="rounded-lg border border-amber-600/40 bg-amber-950/30 p-4 space-y-1.5">
+                      <div className="text-sm font-medium text-amber-200">Demo directory is empty</div>
+                      <p className="text-xs text-amber-100/70 leading-relaxed">
+                        The database schema is in place but has no synthetic customers yet. Run{" "}
+                        <code className="text-amber-300 font-mono">bun run seed</code> in the project root
+                        (see README → Quickstart), then reload this page to pick a demo identity.
+                      </p>
                     </div>
                   )}
                   {loadError && (
@@ -185,6 +204,48 @@ export default function Home() {
                       <Loader2 className="h-4 w-4" /> Retry loading demo directory
                     </Button>
                   )}
+                </div>
+
+                {/* ------- guided tour: the 3-minute proof (product rec #1) ------- */}
+                <div className="pt-3 border-t border-emerald-800/40 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-200">
+                    <Map className="h-4 w-4" />
+                    <span className="text-sm font-medium">Guided tour — the 3-minute proof</span>
+                  </div>
+                  <p className="text-xs text-emerald-100/60 leading-relaxed">
+                    One curated journey, with the guide rail on: ask a tariff question → see the citation
+                    and deterministic fee → watch a safe refusal → propose a transfer → OTP → switch to
+                    the officer console → approve → verify the audit chain. Each step says what it shows
+                    <i> and what it does not prove</i>.
+                  </p>
+                  <button
+                    onClick={() => {
+                      // the tour is scripted around Amina (established beneficiary
+                      // Jane → the transfer step flows to OTP + approval)
+                      const amina = customers.find((c) => c.name.startsWith("Amina")) ?? customers[0];
+                      if (amina) login(amina.id, "customer", { tour: true });
+                    }}
+                    disabled={loggingIn !== null || customers.length === 0}
+                    className="w-full text-left rounded-lg border border-emerald-600/50 bg-emerald-800/60 hover:bg-emerald-700/60 hover:border-emerald-400 transition p-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-emerald-100 group-hover:text-amber-200 text-sm">
+                          Start the guided tour{(customers.find((c) => c.name.startsWith("Amina")) ?? customers[0])?.name
+                            ? ` as ${(customers.find((c) => c.name.startsWith("Amina")) ?? customers[0]).name.split(" ")[0]}`
+                            : ""}
+                        </div>
+                        <div className="text-[11px] text-emerald-200/50 mt-0.5">
+                          8 steps · chat → officer console · exit any time
+                        </div>
+                      </div>
+                      {loggingIn !== null ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-emerald-300" />
+                      ) : (
+                        <Map className="h-4 w-4 text-emerald-300/70" />
+                      )}
+                    </div>
+                  </button>
                 </div>
 
                 {/* ------- demo officer console entry (clearly labelled) ------- */}

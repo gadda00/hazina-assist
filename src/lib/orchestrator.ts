@@ -22,6 +22,8 @@ import { routeIntent, type RouteDecision } from "@/lib/router";
 import { ragAnswer } from "@/lib/rag";
 import { callTool, listTools, type Session } from "@/lib/tools";
 import { proposeTransfer, policyGate, issueOtp, verifyOtp, stageSignedIntent, createApprovalForIntent, completeOtpFlow, demoMode } from "@/lib/transfer";
+import { computeFee } from "@/lib/banking";
+import { transfersAvailable } from "@/lib/deployment";
 import { gatewayChat } from "@/lib/gateway";
 import { categorise } from "@/lib/categoriser";
 
@@ -169,6 +171,17 @@ async function accountNode(ctx: RunCtx, input: string, lang: string) {
 
 async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<Partial<OrchestratorResult>> {
   // OTP submission is handled pre-route by runOrchestrator (completeOtpFlow).
+  // Operational-mode guard: without a real OTP delivery provider the step-up
+  // would be theatre — hiding a code is not an SMS. Refuse instead of faking
+  // an out-of-band factor (deep-review P0-3).
+  if (!transfersAvailable()) {
+    return {
+      reply:
+        "Transfers are currently unavailable: no OTP delivery provider is configured for this deployment. Nothing was staged and no money can move. Ask me about fees, tariffs or your accounts instead.",
+      route: "transfer",
+      kind: "transfer_unavailable",
+    };
+  }
   // Fresh transfer request → propose → policy gate
   const { proposal, method } = await proposeTransfer(ctx.sessionId, input);
   trace(ctx, "transfer_propose", { proposal, method });
@@ -218,6 +231,22 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
 
   // C. Policy passed → step-up OTP
   const otp = await issueOtp(ctx.sessionId);
+  // Fee transparency BEFORE the customer confirms with OTP — the charge is
+  // computed from the same deterministic tariff table used at execution, so
+  // the number shown here can never drift from what is later debited.
+  const feeChannel =
+    proposal.destinationType === "internal" ? "internal_transfer"
+    : proposal.destinationType === "mpesa" ? "send_to_mpesa"
+    : "pesalink_out";
+  const stagingFee = await computeFee(feeChannel, proposal.amountKes ?? 0);
+  const feeSentence =
+    stagingFee.feeKes > 0
+      ? lang === "sw"
+        ? `Ada ya tuma hili ni KES ${stagingFee.feeKes.toLocaleString()} (kutoka tariff guide, effective ${stagingFee.matchedRow?.effectiveDate ?? "—"}).`
+        : `The charge for this send is KES ${stagingFee.feeKes.toLocaleString()} — computed from the tariff guide (effective ${stagingFee.matchedRow?.effectiveDate ?? "—"}), so the number you see is the number you pay.`
+      : lang === "sw"
+        ? `Tuma hili halina ada (bila malipo).`
+        : `This send carries no fee.`;
   await db.pendingAction.create({
     data: {
       sessionId: ctx.sessionId,
@@ -247,6 +276,8 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
       (lang === "sw"
         ? `Unataka kutuma KES ${(proposal.amountKes ?? 0).toLocaleString()} kwa ${(proposal.beneficiaryName ?? proposal.destination ?? "").toString()} (${proposal.destinationType?.toUpperCase()}). `
         : `You're sending KES ${(proposal.amountKes ?? 0).toLocaleString()} to ${(proposal.beneficiaryName ?? proposal.destination ?? "").toString()} via ${proposal.destinationType?.toUpperCase()}${proposal.destination ? ` (${proposal.destination.replace(/.(?=.{4})/g, "*")})` : ""}. `) +
+      feeSentence +
+      " " +
       (lang === "sw"
         ? `Kwa usalama, nimetuma msimbo wa 6 taratibu kwa simu yako${codeHint}. Ukitipe, tutaendelea.`
         : `For security I've sent a 6-digit code to your phone${codeHint}. Enter it to continue — the money moves only after a bank officer also approves.`),

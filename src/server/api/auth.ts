@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { appendEvent } from "@/lib/audit";
 import { createDemoSession, revokeSessionByToken, tokenFromRequest } from "@/lib/authz";
+import { deploymentMode } from "@/lib/deployment";
 import { ERR, LoginSchema, parseBody, reqId } from "@/lib/schemas";
 
 /**
@@ -9,6 +10,12 @@ import { ERR, LoginSchema, parseBody, reqId } from "@/lib/schemas";
  * `as: "officer"`, open a demo officer session for the ops console). Returns
  * a server-side session + a bearer token; every protected endpoint resolves
  * the session from that token (src/lib/authz.ts).
+ *
+ * DEMO IAM ONLY: this endpoint is the synthetic identity picker. In
+ * DEPLOYMENT_MODE=operational it is refused outright — fail-closed — because
+ * this build ships no real OIDC provider (deep-review P0-1). The startup
+ * assertions in src/lib/deployment.ts already block that boot, but the guard
+ * here defends in depth (e.g. a misconfigured proxy or edge runtime).
  *
  * GET /api/auth/login — list the demo customers + officers.
  *
@@ -19,6 +26,18 @@ import { ERR, LoginSchema, parseBody, reqId } from "@/lib/schemas";
  * (src/app/api/[[...path]]/route.ts).
  */
 export async function POST(req: Request) {
+  if (deploymentMode() !== "demo") {
+    return NextResponse.json(
+      {
+        error: {
+          code: "demo_login_disabled",
+          message:
+            "The demo identity picker is disabled in operational mode. This build ships demo IAM only; integrate a real OIDC provider before running operational.",
+        },
+      },
+      { status: 403 }
+    );
+  }
   const parsed = await parseBody(req, LoginSchema);
   if (!parsed.ok) return parsed.response;
   const { customerId, as } = parsed.data;

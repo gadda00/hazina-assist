@@ -45,8 +45,10 @@ const RECOGNISERS: Recogniser[] = [
     type: "national_id",
     pattern: /(?<![\d.])\d{8}(?![\d.])/g,
     score: 0.45, // low prior; context gate raises it
+    // word-boundary anchors: "I paid 25000000" must NOT match (the old
+    // unanchored /id/i matched the substring inside "paid")
     context: (full, m) =>
-      /(id|identity|pin number|natl|national|ktp|kitambulisho|ID No)/i.test(
+      /\b(id|id\s*no|identity|pin\s*number|natl|national|ktp|kitambulisho)\b/i.test(
         full.slice(Math.max(0, m.index - 30), m.index)
       ),
   },
@@ -55,7 +57,7 @@ const RECOGNISERS: Recogniser[] = [
     pattern: /(?<![\d.\-])\d{10,14}(?![\d.\-])/g,
     score: 0.4,
     context: (full, m) =>
-      /(account|acct|acc no|a\/c|hesabu)/i.test(
+      /\b(account|acct|acc\s*no|a\/c|hesabu)\b/i.test(
         full.slice(Math.max(0, m.index - 30), m.index)
       ),
   },

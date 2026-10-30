@@ -100,3 +100,44 @@ Work Log:
 Stage Summary:
 - The deployed app is now a coherent, role-separated, idempotent, fully-validated demo product; every claim above is backed by an executed check.
 - Remaining demo limitations (deliberate): synthetic data, mock SMS OTP (DEMO_MODE), per-lambda SQLite resets, simplified demo IAM, informational-only security scans.
+
+---
+Task ID: 2
+Agent: main (Z.ai)
+Task: User reported "when I log in everything is blank" — diagnose, fix, and ensure every feature/element works for showcase.
+
+Work Log:
+- Diagnosed: dev server up, but `GET /api/auth/login` returned `{"customers":[],"officers":[]}` — the workspace re-provisioning recreated the SQLite file with schema pushed but ZERO rows in all 16 tables. Login screen had no identities; nothing downstream had data.
+- Ran `bun run prisma/seed.ts` → 3 customers, 3 accounts, 15 transactions, 15 tariff rows, 10 KB chunks, 2 beneficiaries.
+- **Found + fixed a hard app crash (the real "blank screen")**: Monitoring tab rendered `health.dependencies` values directly as React children, but `/api/health` returns `dependencies.database` as an OBJECT `{ok, auditEvents}` — React 19 throws "Objects are not valid as a React child" and unmounts the entire app to a white "Application error" page. Fixed in `src/components/hazina/ops-console.tsx`: typed deps as `Record<string, unknown>`, added `depLabel()`/`depOk()` normalisers (string | {ok,auditEvents,error} → safe text; database now shows "ok · N audit events").
+- **Fee transparency at OTP staging**: transfer staging reply previously revealed the fee only after execution. Now computes it upfront via the same deterministic `computeFee()` (tariff table) used at execution, so the quoted charge can never drift from the debited charge (EN + SW variants).
+- **Empty-directory guard**: login screen now distinguishes "loading…" from "loaded but empty" and shows an actionable panel ("run `bun run seed`") instead of an infinite spinner. Edit in `src/app/page.tsx`.
+- Verified end-to-end: `bunx tsc --noEmit` clean; `bun test` 61/61; `bun run eval` 55/55 (CI gate PASS); API smoke `scripts/feature-smoke.ts` 26/26 (fee/RAG/balance/statement tools, out-of-scope handoff, injection refusal, transfer→OTP→pending-approval, payslip IDP, approvals/audit/evals/metrics/health, RBAC 403).
+- Browser verification (agent-browser): login picker (Amina/Brian/officer), customer chat with live trace panel (route, groundedness, tool calls, citations, audit hash), PesaLink 80k → KES 110 band-correct answer, officer console all 5 tabs render with data, zero console/page errors.
+- Curated showcase state via new scripts (all under scripts/): `reset-demo.ts` (FK-safe wipe of transactional tables, keeps reference data), fresh eval run, `curate-showcase.ts` (warm chat history + 1 OTP-verified pending transfer + 1 clean payslip loan pack → officer queue shows "2 open tasks" decision-ready).
+- Screenshots refreshed: docs/screenshots/login.png, console-approvals.png, verify-login/chat-fee/audit/evals/monitoring.png.
+
+---
+Task ID: 3
+Agent: main (Z.ai)
+Task: Implement the deep-review findings (uploaded Hazina-Assist-Deep-Review.md) — P0 blockers through Phase 4 demo polish.
+
+Work Log:
+- **P0-1 Demo/production boundary**: new `src/lib/deployment.ts` (deploymentMode/otpRevealEnabled/transfersAvailable/deploymentViolations) + `src/instrumentation.ts` boot hook. Operational mode fails CLOSED: requires ≥32-char HAZINA_INTENT_SECRET (rejects known dev defaults), DEMO_MODE=false, OTP delivery provider; demo identity picker refused at POST /api/auth/login (403) in operational mode. 10 unit tests pin the matrix (`tests/deployment.test.ts`).
+- **P0-2 Atomic transfers**: `coreTransfer` rewritten — single transaction with conditional `UPDATE Account SET balance = balance - X WHERE balance >= X` (atomic funds check + row lock), daily-cap recount under that lock, fee computed in-tx, idempotency record in the same tx (unique-constraint catch closes the same-key race). Race tests: last-funds race, daily-cap race, same-key replay (`tests/transfer-race.test.ts`).
+- **P0-3 OTP semantics**: DEMO_MODE documented as reveal-only; transferNode refuses to run without an OTP provider in operational mode (kind=transfer_unavailable); INTENT_SECRET throws in operational mode when missing/known-default; OTP consumption now conditional-atomic (updateMany where consumed:false) — race-tested.
+- **P1-4 SQLite honesty**: README/DEPLOY.md/.env.example now state SQLite-only; Postgres removed from compose (was unusable); appdata volume added; Postgres labelled roadmap.
+- **P1-5 Prometheus scrape auth**: /api/metrics accepts dedicated scrape token (timingSafeEqual, HAZINA_METRICS_TOKEN) or officer session; prometheus.yml carries Bearer credential (dev default documented + rotation steps in DEPLOY.md).
+- **P1-6 Helm**: fixed the extra-brace render defect; split readiness (?probe=ready) vs liveness (?probe=live); added blocking `helm lint`+`helm template` CI job; verified rendering locally with helm v3.16.4.
+- **P1-7 Officer identity**: approvals POST derives officerName from the authenticated session; `officer` field removed from ApprovalPostSchema; UI shows read-only "(from session)" chip. API test: fake officer name ignored, decidedBy = session name.
+- **P1-8/P2-14 Confirmation dialog**: AlertDialog with exact transaction summary (from/to/amount/fee/total debit/irreversibility/session-derived identity) before any transfer decision; reject still requires a recorded reason.
+- **P2-9 Audit honesty**: /api/audit returns verifiedEvents/totalEventsInDb/coverage ("full-history" vs "suffix-window"); ops console renders the verified range + "tamper-evident, not immutable" caveat.
+- **P2-15/16/17 chat UX**: payslip buttons relabelled "synthetic sample (fixed demo fixture — no file upload)"; "Why this answer" is now two-layer (plain-language sentence derived from result kind + technical trace); control-journey strip (Ask→Ground→Check→Confirm→Human review→Record) with active stage; aria-labels on composer/OTP/send, aria-live log on the message list.
+- **Phase 4 guided tour**: `src/lib/tour.ts` + TourBanner + login entry "Guided tour — the 3-minute proof" (targets Amina). 8 steps across both surfaces, advanced by real results only, each step states Shows + Does-not-prove. Full browser walkthrough verified: fee→citation→refusal→transfer→OTP→officer→confirm-dialog→audit-verified→banner clears.
+- **P2-10 PII honesty**: new `docs/governance/pii-coverage.md` (detected types w/ context gates + score threshold, documented gaps incl. no name NER, storage/egress/retention table); 11 tests pin coverage AND limits (`tests/pii-coverage.test.ts`); **fixed a real false-positive bug** — context gate regex matched "id" inside "paid" (unanchored); now word-boundary anchored in hazina-kit pii.ts.
+- **P2-12/13 CI+health**: scan jobs labelled [blocking]/[advisory]; /api/health supports ?probe=live|ready|full with mode field; metrics HELP documents the 5,000-event window.
+- **P2-18 onboarding**: Quickstart starts with `cp .env.example .env`; db:push no longer --accept-data-loss (force variant separate); test counts reconciled (75→86 after new suites); login empty-state guard from previous session retained.
+- **Loan-pack wording**: "Recommend proceed/decline" + "officer recommended: proceed" badges + confirm text "no lending decision or disbursement happens here".
+- Workspace re-provisioned again mid-session (DB wiped): re-seeded, root cause is environmental — scripts/reset-demo.ts + purge-fixtures.ts + curate-showcase.ts now form the reproducible showcase pipeline.
+- Verification: 86/86 tests (8 consecutive green runs), tsc clean, lint clean (1 warning), eval gate 55/55 PASS, feature-smoke 26/26, full guided tour via agent-browser with zero console errors.
+- Screenshots: login.png (with tour entry), e2e-desktop-chat.png (journey strip + plain language), console-approvals.png, console-confirm-dialog.png, tour-*.png.

@@ -2,8 +2,15 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
+  # Business metrics endpoint. Authenticated scrape (deep-review P1-5):
+  # /api/metrics accepts a dedicated read-only scrape token via Bearer auth
+  # (HAZINA_METRICS_TOKEN on the app). The token below is a DEV DEFAULT that
+  # matches deploy/docker-compose.yml — rotate both sides together for
+  # anything beyond a local demo stack (coordinated env change).
   - job_name: hazina-app
     metrics_path: /api/metrics
+    authorization:
+      credentials: dev-scrape-token-change-me
     static_configs:
       - targets: ["app:3000"]
 
