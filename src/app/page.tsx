@@ -5,9 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Shield, Landmark, MessageSquare, Users, Loader2, LogOut, Lock, UserCog, Map } from "lucide-react";
+import { Shield, MessageSquare, Users, Loader2, LogOut, Lock, UserCog, Map } from "lucide-react";
 import { ChatView } from "@/components/hazina/chat-view";
 import { OpsConsole } from "@/components/hazina/ops-console";
+import { HazinaLogo, HazinaMark } from "@/components/hazina/logo";
 import { apiFetch, setApiToken } from "@/lib/client-api";
 import { startTour } from "@/lib/tour";
 import type { SessionInfo } from "@/lib/types";
@@ -122,15 +123,8 @@ export default function Home() {
         <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
           <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-8 items-center">
             <div className="text-white space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-xl bg-amber-400/20 border border-amber-300/30 flex items-center justify-center">
-                  <Landmark className="h-6 w-6 text-amber-300" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">Hazina Assist</h1>
-                  <p className="text-emerald-200/80 text-sm">Safety-oriented synthetic banking demo</p>
-                </div>
-              </div>
+              <HazinaLogo />
+              <div className="h-px bg-gradient-to-r from-amber-300/50 via-emerald-400/30 to-transparent" />
               <p className="text-emerald-100/90 leading-relaxed max-w-md">
                 An assistant that answers policy and tariff questions with citations, reads accounts
                 through scoped tools, and stages transfers that only move after OTP step-up and a
@@ -317,9 +311,7 @@ export default function Home() {
       <header className="sticky top-0 z-40 border-b border-emerald-900/10 bg-emerald-950 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`h-9 w-9 rounded-lg border flex items-center justify-center shrink-0 ${isOfficer ? "bg-amber-400/20 border-amber-300/30" : "bg-amber-400/20 border-amber-300/30"}`}>
-              {isOfficer ? <UserCog className="h-5 w-5 text-amber-300" /> : <Landmark className="h-5 w-5 text-amber-300" />}
-            </div>
+            <HazinaMark className="h-9 w-9 shrink-0 drop-shadow" />
             <div className="min-w-0">
               <div className="font-semibold leading-tight truncate">Hazina Assist</div>
               <div className="text-[11px] text-emerald-300/80 truncate">
@@ -388,7 +380,10 @@ export default function Home() {
 
       <footer className="border-t border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span>Session {session.session.id.slice(0, 14)}… · audit chain active</span>
+          <span className="flex items-center gap-1.5">
+            <HazinaMark className="h-4 w-4" />
+            Session {session.session.id.slice(0, 14)}… · audit chain active
+          </span>
           <span>
             Controls aligned to CBK draft instruments · DPA 2019 s.35 &ldquo;recommend, not decide&rdquo; ·
             OWASP LLM Top 10

@@ -19,13 +19,17 @@ export const metadata: Metadata = {
     "Bank-grade AI assistant: policy Q&A with citations, account tools, human-approved transfers, payslip intelligence, guardrails, hash-chained audit and evaluation. Built to CBK-aligned controls.",
   keywords: ["AI banking", "guardrails", "RAG", "audit trail", "HITL", "Kenya", "CBK", "evaluation"],
   authors: [{ name: "Hazina Assist" }],
+  // Favicon is the local Hazina mark (src/app/icon.svg is served by the
+  // Next.js app router automatically); no external CDN dependency.
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg" }],
   },
   openGraph: {
     title: "Hazina Assist",
     description: "Bank-grade AI assistant with guardrails, HITL and audit trails",
     type: "website",
+    images: ["/icon.svg"],
   },
 };
 

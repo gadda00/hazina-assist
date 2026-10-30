@@ -8,11 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   AlertTriangle, BookOpen, Bot, ChevronRight, FileText, Landmark, Loader2, Lock,
-  Send, ShieldAlert, ShieldCheck, Sparkles, User, Wrench, KeyRound, Activity, FlaskConical,
+  Send, ShieldAlert, ShieldCheck, User, Wrench, KeyRound, Activity, FlaskConical,
 } from "lucide-react";
 import type { ChatMessage, ChatResult, Citation, SessionInfo } from "@/lib/types";
 import { apiFetch } from "@/lib/client-api";
 import { TourBanner } from "@/components/hazina/tour-banner";
+import { HazinaMark } from "@/components/hazina/logo";
 import { advanceTourTo } from "@/lib/tour";
 
 const QUICK_PROMPTS: { label: string; text: string; tag?: string }[] = [
@@ -149,7 +150,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
         <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm min-h-[70vh] max-h-[86vh] min-w-0">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-700" />
+              <HazinaMark className="h-5 w-5" />
               <span className="font-medium text-sm text-slate-800">Hazina Assistant</span>
               <Badge variant="outline" className="text-[10px] border-emerald-200 text-emerald-700 bg-emerald-50">
                 guardrails live

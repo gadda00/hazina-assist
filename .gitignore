@@ -53,3 +53,7 @@ skills/
 firstlight/
 examples/
 scripts/verify-*.png
+
+# agent workspace artifacts
+tool-results/
+agent-ctx/

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.svg" width="96" alt="Hazina Assist — shield and gem mark" />
+</p>
+
 # Hazina Assist
 
 **A safety-oriented synthetic banking demo that maps to every duty in the job ad — controls, integration and operation, not a tutorial chatbot.**

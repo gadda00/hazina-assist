@@ -164,3 +164,25 @@ Work Log:
 - Found & fixed during browser verification: my own mid-session fixture purge had deleted mid-chain audit events → the tamper-evident chain correctly reported "CHAIN BROKEN at #68" — resolved by the reset→auto-heal→eval rebuild (chain green, full-history).
 - Verification: `bunx tsc --noEmit` clean; `bun test` 86/86; `bun run eval` 55/55 CI gate PASS; feature-smoke extended to 33/33 (directory demoState, 5 customers/2 officers, tampered payslip flags ≥2 rules, accounts endpoint + RBAC 403, curated open+decided queue, loan-pack name payloads); full 8-step guided tour walked in agent-browser with zero console/page errors (fee→citation→refusal→transfer→OTP→officer→approve→audit-verified→completion card→restart); all 5 officer tabs + accounts rail screenshotted.
 - Screenshots refreshed: login.png, chat-fee.png, chat-accounts.png, console-approvals.png, console-loanpack.png, verify-audit.png, verify-evals.png, verify-monitoring.png, tour-complete.png.
+
+---
+Task ID: 5
+Agent: main (Z.ai)
+Task: "make more improvements and error fixing.. also add logo" — brand identity for Hazina Assist + robustness sweep.
+
+Work Log:
+- **Brand logo designed & integrated everywhere** ("hazina" = Swahili for *treasure*): a shield (bank-grade safety) holding a faceted gem (the treasure) in the app's emerald + gold palette.
+  - `src/components/hazina/logo.tsx` — `HazinaMark` (inline SVG, crisp 16px→hero) + `HazinaLogo` (mark+wordmark lockup); used on the login hero (replacing the generic Landmark icon), the authenticated app header (replacing Landmark/UserCog amber boxes), the chat column header (replacing Sparkles), the ops-console heading (replacing Users icon) and the app footer.
+  - `src/app/icon.svg` — plate version of the mark; Next.js serves it as the favicon (metadata now points at the LOCAL icon — the old external z-cdn URL is gone; apple + OG images too).
+  - `public/logo.svg` — replaced the leftover generic Z.ai asset with the Hazina mark; README now opens with a centered logo.
+  - `docs/index.html` (static GitHub-Pages showcase) — the text "H" badge is now the real inline SVG mark, plus an inline data-URI SVG favicon.
+- **Verified in a real browser**: logo present/correctly sized on all surfaces; VLM visual review of login.png and console-approvals.png confirms the mark is well-formed, aligned, professional at both hero and 36px header sizes; zero console/page errors.
+- **Guided tour re-validated end-to-end** (regression check of the prior fix): walked all 8 steps live — fee answer → citation click → injection refusal → transfer staging (fee disclosed BEFORE confirm) → OTP entry → officer sign-in → deliberate-confirmation approve & execute → audit chain verify (592/592 events) → completion card → dismiss; every auto-advance fired; Back/Next/dots all clickable; tour state cleared from localStorage on dismiss.
+- **Officer console re-validated**: all 5 tabs render (queue 7+ open tasks with stat chips, 5 loan packs incl. the tampered one, audit chain verify, evals 55/55 PASS, monitoring with dependency checks); login directory shows 5 customers + 2 officers.
+- **Fixed browser-smoke.py brittleness** (2 real failures found while error-hunting):
+  1. Balance check hardcoded "KES 84,250" — demo transfers legitimately debit the seeded account, so the figure drifts (now 78,217.5). Now asserts the deterministic SHAPE of the balance answer (`Salio lako kwa account acct_x: KES n.`) and reports the actual figure.
+  2. Approval step didn't click through the deliberate-confirmation dialog ("Execute transfer") added with the guided tour, and could pick an arbitrary (possibly TTL-expired) task card. Now targets the just-staged task card (matches the beneficiary) and confirms the dialog.
+  - Result: browser-smoke 18/18 PASS incl. mobile 390px no-overflow and "no console errors during the whole flow".
+- **Screenshots refreshed** for the new branding: login.png, chat-fee.png, chat-accounts.png, console-approvals.png, console-loanpack.png, verify-audit.png, verify-evals.png, verify-monitoring.png + new tour-banner-chat.png (script: `scripts/refresh-screenshots.py`, reusable).
+- **Repo hygiene**: `tool-results/` workspace artifacts untracked + .gitignore entries for tool-results/agent-ctx (they had been committed); temp debug script removed.
+- Verification: `bun run typecheck` clean; `bun test` 86/86; `bunx eslint .` clean; feature-smoke 33/33; browser-smoke 18/18; favicon served at /icon.svg (200, image/svg+xml).

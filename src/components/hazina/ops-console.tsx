@@ -12,13 +12,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Activity, BadgeCheck, Ban, CheckCircle2, ClipboardCheck, FileSearch, FlaskConical,
-  Gauge, Link2, Loader2, Lock, RefreshCw, ShieldCheck, Users, KeyRound,
+  Gauge, Link2, Loader2, Lock, RefreshCw, ShieldCheck, KeyRound,
 } from "lucide-react";
 import type {
   ApprovalTask, AuditEventView, EvalRunView, PayslipPackView, SessionInfo,
 } from "@/lib/types";
 import { apiFetch } from "@/lib/client-api";
 import { TourBanner } from "@/components/hazina/tour-banner";
+import { HazinaMark } from "@/components/hazina/logo";
 import { advanceTourTo } from "@/lib/tour";
 
 type ConsoleTab = "approvals" | "packs" | "audit" | "evals" | "monitor";
@@ -39,7 +40,7 @@ export function OpsConsole({ session }: { session: SessionInfo }) {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
       <TourBanner tick={tourTick} />
       <div className="mb-4 flex items-center gap-2 flex-wrap">
-        <Users className="h-5 w-5 text-emerald-800" />
+        <HazinaMark className="h-6 w-6" />
         <h1 className="text-lg font-semibold text-slate-900">Operations console</h1>
         <span className="text-xs text-slate-500">
           human-in-the-loop, audit verification, evaluation & monitoring
