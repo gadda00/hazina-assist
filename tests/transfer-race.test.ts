@@ -133,6 +133,6 @@ describe("OTP atomic consumption", () => {
     // removed the pending marker before the loser's pre-check ran
     // ("no_otp_pending"). Both are safe failures — exactly one verify wins.
     const loser = a.ok ? b : a;
-    expect(["otp_already_used", "no_otp_pending"]).toContain(loser.reason);
+    expect(["otp_already_used", "no_otp_pending"]).toContain(loser.reason ?? "");
   });
 });

@@ -18,7 +18,6 @@ export function TourBanner({ tick }: { tick?: number }) {
     // parent's `tick` prop re-triggers this read whenever progress lands.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActive(tourActive());
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStep(tourStep());
   }, [tick]);
 
