@@ -230,3 +230,19 @@ Stage Summary:
 - Both repos fully shipped and green on GitHub: hazina-assist (CI 11/11 jobs, Pages showcase, Vercel-ready) and firstlight (CI incl. e2e, Pages demo, GHCR images, honest dispatch-only deploys).
 - Operational lesson recorded: run `bun test` from each repo's own root — a shared root mixes relative-path DBs and produces spurious cross-project failures.
 - SECURITY: the PAT was used only in-memory for these pushes and never persisted; it carries very broad scopes (admin:org, delete_repo, workflow, …) — the user should revoke it now that the pushes are done.
+
+## 2026-11-01 — verification-grade hardening pass (commit 31e2c38)
+
+Executed the deep-review upgrade prompt's highest-value slices:
+
+- **P0-1/P0-2 fixed**: `ignoreBuildErrors` removed (build fails on type errors; pinned by `tests/repo-contract.test.ts`), `reactStrictMode: true`; `bun run verify` is self-contained (isolated seeded DB per run via `tests/setup.ts` preload → lint → typecheck → tests → eval gate → type-validated build) and writes `docs/eval/verification.json`; CI strictly `--frozen-lockfile` with a clean-checkout verify job.
+- **P1-4 transfer/approval state machine**: `open → claiming → executing → executed` / `execution_failed` (retryable, bounded); durable JSON receipt before success; lease + `reconcileStuckTasks()` crash recovery; ambiguous provider timeout = exactly one idempotent retry (audited); all crash windows tested (`tests/transfer-state.test.ts`).
+- **P1-8 OTP**: keyed-hash storage (no plaintext), transaction-fingerprint binding, resend cooldown + hourly cap + sweep (`HAZINA_OTP_COOLDOWN_MS` / `HAZINA_OTP_MAX_PER_HOUR` overridable).
+- **P1-6 audit redesign**: per-org chains (orgId, seq, requestId/traceId, schemaVersion), counter-row serialised appends, `@@unique([orgId, seq])`, first-broken-link verification, session projections vs global neighbours, signed archival checkpoints (prune stays provable) — `tests/audit-chain.test.ts` (incl. 30 concurrent writers, gap-free).
+- **P1-5 money**: strict write-boundary validator, tariff band `@@unique`, band-edge fee tests.
+- **P0-3/P1-7 boundary**: operational mode also rejects SQLite/tmp DBs + weak metrics tokens; demo directory listing disabled operationally.
+- **P1-13/P2-18**: metrics ordered newest-first; compose pinned versions, localhost-bound monitoring, operational profile refuses fallback secrets; SQLite single-connection runtime.
+- Discovered + fixed two latent bugs: unscoped `bun test`/eslint swallowing a nested foreign checkout (`firstlight/`), and the stale dev server on :3000 (feature-smoke now honours `HAZINA_BASE_URL`).
+
+Evidence: `bun run verify` PASS (134/134 tests, eval 100% 55/55, type-validated build); feature smoke 33/33 on the standalone production server, cold start.
+Not done (deliberate): real document upload pipeline (P5), RAG claim-span validation + expanded adversarial suite (P6), UI deepening (P8), persisted-money Float→cents migration, categoriser calibration/drift, compose restore drill.
