@@ -67,7 +67,7 @@ CODE=$(curl -s -o /tmp/gh-repo.json -w "%{http_code}" -X POST "$API/user/repos" 
   -H "${AUTH[0]}" -H "${AUTH[1]}" -H "${AUTH[2]}" \
   -d "{\"name\":\"$REPO\",\"description\":\"Bank-grade AI assistant for a Kenyan bank — governed RAG, signed transfer intents with human approval, hash-chained audit, eval CI gate\",\"homepage\":\"https://$GH_USER.github.io/$REPO/\",\"private\":false,\"has_wiki\":false,\"auto_init\":false}")
 if [[ "$CODE" == "201" ]]; then echo "  created"
-elif [[ "$CODE" == "202" || "$CODE" == "409" ]]; then echo "  already exists — continuing"
+elif [[ "$CODE" == "202" || "$CODE" == "409" || "$CODE" == "422" ]]; then echo "  already exists — continuing"
 else echo "  ! repo creation failed (HTTP $CODE)"; cat /tmp/gh-repo.json; exit 1; fi
 
 # --- 2. push main ------------------------------------------------------------
