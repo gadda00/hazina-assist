@@ -44,7 +44,16 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: [
+    // Root artifacts
+    "node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts",
+    // NESTED foreign projects and their build outputs: `**/`-prefixed forms
+    // so a repo cloned into the workspace (e.g. a second checkout used for
+    // comparison) can never contaminate lint with generated chunks.
+    "**/node_modules/**", "**/.next/**", "**/out/**", "**/build/**", "**/dist/**",
+    // Sandbox scaffolding (not part of Hazina Assist)
+    "examples/**", "skills/**", "firstlight/**",
+  ]
 }];
 
 export default eslintConfig;

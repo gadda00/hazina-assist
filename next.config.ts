@@ -18,10 +18,12 @@ const nextConfig: NextConfig = {
   },
   // The reusable kit ships raw TypeScript; transpile it into the app build.
   transpilePackages: ["@hazina/kit"],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  reactStrictMode: false,
+  // Production build MUST fail on TypeScript errors (deep-review P0-1):
+  // no type-error suppression option may ever appear here — guarded by
+  // tests/repo-contract.test.ts. An explicit `bun run typecheck` gate exists
+  // as well; the build enforces the same contract so a broken artifact can
+  // never ship green.
+  reactStrictMode: true,
 };
 
 export default nextConfig;

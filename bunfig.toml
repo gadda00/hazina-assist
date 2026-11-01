@@ -1,0 +1,6 @@
+# Bun test configuration — the preload provisions an ISOLATED, SEEDED
+# throwaway SQLite database before any test file imports Prisma (see
+# tests/setup.ts). This is what makes `bun test ./tests/` self-contained
+# from a clean checkout: no db:push / seed step is required first.
+[test]
+preload = ["./tests/setup.ts"]

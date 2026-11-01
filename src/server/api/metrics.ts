@@ -36,14 +36,20 @@ export async function GET(req: Request) {
     if (!auth.ok) return auth.response;
   }
   try {
-  const events = await db.auditEvent.findMany({ take: 5000 });
-  const payloads = events.map((e) => {
-    try { return JSON.parse(e.payload) as Record<string, unknown>; } catch { return {}; }
-  });
+    // WINDOW HONESTY (deep-review P1-13): records are explicitly ordered
+    // NEWEST-FIRST before limiting — without the ORDER BY the bounded window
+    // is an arbitrary slice, not "the newest 5,000", and every counter
+    // derived from it is meaningless.
+    const events = await db.auditEvent.findMany({ orderBy: { id: "desc" }, take: 5000 });
+    const payloads = events.map((e) => {
+      try { return JSON.parse(e.payload) as Record<string, unknown>; } catch { return {}; }
+    });
 
-  const respond = events.filter((e) => e.eventType === "respond");
-  const latencies = respond.map((e) => (JSON.parse(e.payload) as { latency_ms?: number }).latency_ms ?? 0).filter((n) => n > 0);
-  const costs = respond.map((e) => (JSON.parse(e.payload) as { cost_usd?: number }).cost_usd ?? 0);
+    const respond = events
+      .map((e) => ({ e, p: (() => { try { return JSON.parse(e.payload) as { latency_ms?: number; cost_usd?: number }; } catch { return {}; } })() }))
+      .filter(({ e }) => e.eventType === "respond");
+    const latencies = respond.map(({ p }) => p.latency_ms ?? 0).filter((n) => n > 0);
+    const costs = respond.map(({ p }) => p.cost_usd ?? 0);
   const sorted = [...latencies].sort((a, b) => a - b);
   const p = (q: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : 0);
 

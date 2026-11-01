@@ -123,7 +123,9 @@ describe("OTP atomic consumption", () => {
     await db.pendingAction.deleteMany({ where: { sessionId: sess.id } });
     await db.otpCode.deleteMany({ where: { sessionId: sess.id } });
     const { issueOtp, verifyOtp } = await import("../src/lib/transfer");
-    const { code } = await issueOtp(sess.id);
+    const issued = await issueOtp(sess.id);
+    if (!issued.ok) throw new Error("issueOtp refused on a fresh session (limits should not trigger)");
+    const code = issued.code;
     const [a, b] = await Promise.all([
       verifyOtp(sess.id, code),
       verifyOtp(sess.id, code),

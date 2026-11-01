@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Activity, BadgeCheck, Ban, CheckCircle2, ClipboardCheck, FileSearch, FlaskConical,
-  Gauge, Link2, Loader2, Lock, RefreshCw, ShieldCheck, KeyRound,
+  Gauge, Link2, Loader2, Lock, RefreshCw, ShieldCheck, KeyRound, AlertTriangle,
 } from "lucide-react";
 import type {
   ApprovalTask, AuditEventView, EvalRunView, PayslipPackView, SessionInfo,
@@ -187,7 +187,8 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
     transfers: open.filter((t) => t.type === "transfer").length,
     packs: open.filter((t) => t.type === "loan_pack").length,
     highRisk: open.filter((t) => t.riskLevel === "high").length,
-    executed: tasks.filter((t) => t.status === "approved" && t.type === "transfer").length,
+    executed: tasks.filter((t) => t.status === "executed" && t.type === "transfer").length,
+    failed: tasks.filter((t) => t.status === "execution_failed").length,
     rejected: tasks.filter((t) => t.status === "rejected").length,
   };
 
@@ -219,6 +220,11 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
               <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
                 {stat.executed} executed
               </Badge>
+              {stat.failed > 0 ? (
+                <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 text-[10px]">
+                  {stat.failed} execution failed (retryable)
+                </Badge>
+              ) : null}
               <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-[10px]">
                 {stat.rejected} rejected
               </Badge>
@@ -333,8 +339,12 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
                 {t.type} · KES {Number(t.payload.amountKes ?? t.payload.requestedAmountKes ?? 0).toLocaleString()}
               </span>
               <span className="flex items-center gap-1.5">
-                {t.status === "approved" ? (
-                  <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> approved by {t.decidedBy}</>
+                {t.status === "executed" ? (
+                  <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> executed{t.decidedBy ? ` · ${t.decidedBy}` : ""}</>
+                ) : t.status === "execution_failed" ? (
+                  <><AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> execution failed{t.reason ? ` (${t.reason})` : ""} — retryable</>
+                ) : t.status === "claiming" || t.status === "executing" ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin text-sky-600" /> {t.status}…</>
                 ) : (
                   <><Ban className="h-3.5 w-3.5 text-red-500" /> rejected{t.reason ? ` (${t.reason})` : ""}</>
                 )}

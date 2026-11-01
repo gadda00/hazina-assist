@@ -33,6 +33,20 @@ export const dbDiagnostics: {
  * the GENERATED CLIENT directory (node_modules/.prisma/client), silently
  * creating an empty DB elsewhere. Never pass a relative URL here.
  */
+/**
+ * SQLite single-writer reality (deep-review P0-2 follow-up): ONE pooled
+ * connection serialises every write — concurrent audit appends, background
+ * showcase curation and request handling queue instead of storming
+ * SQLITE_BUSY on separate connections. Correctness is unaffected: all race
+ * protections are single-statement conditional updates (see
+ * tests/transfer-race.test.ts + tests/audit-chain.test.ts, both run green
+ * under exactly this configuration).
+ */
+function withSingleConnection(url: string): string {
+  if (!url.startsWith("file:")) return url;
+  return url.includes("?") ? url : `${url}?connection_limit=1`;
+}
+
 function resolveDatasourceUrl(): string | undefined {
   const raw = process.env.DATABASE_URL ?? ''
   // Non-file URLs (Postgres etc.) pass through untouched.
@@ -45,10 +59,10 @@ function resolveDatasourceUrl(): string | undefined {
   // normalised to absolute-from-cwd BEFORE reaching the `datasources` option —
   // the option resolves relatives against the generated-client dir (see note).
   if (raw && !path.isAbsolute(rel)) {
-    return `file:${path.resolve(process.cwd(), rel)}`
+    return withSingleConnection(`file:${path.resolve(process.cwd(), rel)}`)
   }
   // An explicitly-set ABSOLUTE file: URL is the operator's choice — passthrough.
-  if (raw) return raw
+  if (raw) return withSingleConnection(raw)
 
   const candidates = [
     path.resolve(process.cwd(), 'db', 'custom.db'),
@@ -70,13 +84,13 @@ function resolveDatasourceUrl(): string | undefined {
     // reliable across runtimes: relative URLs resolve against the GENERATED
     // CLIENT directory (node_modules/.prisma/client), not cwd — verified by
     // tests/safety.test.ts and the Vercel simulation suite.
-    return `file:${writableCopy(abs)}`
+    return withSingleConnection(`file:${writableCopy(abs)}`)
   }
   // Nothing found: absolute /tmp fallback — queries surface "table does not
   // exist" rather than an opaque constructor crash, and GET /api/health
   // reports the searched locations (never a relative URL — see note above).
   dbDiagnostics.resolvedUrl = null
-  return 'file:/tmp/hazina-demo.db'
+  return withSingleConnection('file:/tmp/hazina-demo.db')
 }
 
 /**

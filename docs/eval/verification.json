@@ -1,0 +1,63 @@
+{
+  "command": "bun run verify",
+  "overall": "PASS",
+  "commit": "37483b4e1d6260b1f08830d3c52f4d7d3fd8647e",
+  "generatedAt": "2026-11-01T07:08:38.561Z",
+  "deploymentMode": "demo",
+  "toolchain": {
+    "bun": "1.3.14",
+    "node": "24.3.0",
+    "prisma": "6.19.2",
+    "typescript": "5.9.3"
+  },
+  "database": {
+    "provider": "sqlite",
+    "posture": "isolated throwaway test DB (per-run tmp file); demo deployment posture"
+  },
+  "steps": {
+    "lint": {
+      "ok": true,
+      "exitCode": 0
+    },
+    "typecheck": {
+      "ok": true,
+      "exitCode": 0
+    },
+    "test": {
+      "ok": true,
+      "exitCode": 0
+    },
+    "eval": {
+      "ok": true,
+      "exitCode": 0
+    },
+    "build": {
+      "ok": true,
+      "exitCode": 0
+    }
+  },
+  "tests": {
+    "total": 134,
+    "pass": 134,
+    "fail": 0,
+    "files": 11
+  },
+  "evaluation": {
+    "passRatePercent": "100.0",
+    "casesPassed": 55,
+    "casesTotal": 55,
+    "routeAccuracyPercent": "100.0",
+    "refusalPrecisionRecall": "1/1",
+    "feeNumericMatchPercent": "100.0",
+    "latency": "9ms / 2069ms",
+    "gate": "PASS"
+  },
+  "build": {
+    "ok": true,
+    "typeValidation": "enforced — next.config.ts has no ignoreBuildErrors escape"
+  },
+  "notes": [
+    "Counts in this file are GENERATED from command output, never hand-edited.",
+    "Demo system: synthetic data only; see README for the production boundary."
+  ]
+}

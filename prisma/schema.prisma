@@ -61,6 +61,8 @@ model Transaction {
   category    String? // enriched by the Data Science categoriser service
   status      String   @default("completed") // completed | pending | failed
   ts          DateTime @default(now())
+
+  @@index([accountId, ts]) // statements + daily-cap recount scans
 }
 
 model Beneficiary {
@@ -138,11 +140,20 @@ model TransferIntent {
   sig             String // HMAC-SHA256 hex
   nonce           String
   exp             Int // unix seconds
-  status          String   @default("staged") // staged | otp_verified | pending_approval | executed | rejected | expired
+  // Explicit execution state machine (deep-review P1-4):
+  //   staged → otp_verified → pending_approval → executing → executed
+  //                                                 ↘ execution_failed (retryable)
+  //   staged → rejected | expired
+  status          String   @default("staged")
   executedTxnRef  String?
   executedFeeKes  Float?
-  idempotencyKey  String?
+  idempotencyKey  String?  @unique // durable replay key — one intent, one key
+  executionAttempts Int   @default(0) // persisted execution attempts (crash forensics)
+  lastExecutionError String? // provider/refusal reason of the latest attempt
   createdAt       DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([status, createdAt])
 }
 
 model ApprovalTask {
@@ -153,26 +164,50 @@ model ApprovalTask {
   refId     String // TransferIntent id or PayslipPack id
   payload   String // JSON snapshot for the console
   riskLevel String   @default("low") // low | medium | high
-  status    String   @default("open") // open | approved | rejected | expired
+  // Approval state machine (deep-review P1-4): the task is never marked
+  // success before the effect + receipt are durably reconciled.
+  //   open → claiming → executing → executed
+  //                        ↘ execution_failed (retryable via re-claim)
+  //   open → rejected
+  // A crash between claim and effect leaves claiming/executing behind a
+  // LEASE (claimedAt); reconcileStuckTasks() re-opens expired leases.
+  status    String   @default("open") // open | claiming | executing | executed | execution_failed | rejected | expired
   reason    String?
   decidedBy String?
   decidedAt DateTime?
+  claimedAt   DateTime? // lease start — crash recovery boundary
+  attemptCount Int     @default(0) // guarded execution attempts (incl. retries)
+  receipt     String?  // durable JSON receipt: txnRef, feeKes, messageRef, executedAt, attempts
   createdAt DateTime @default(now())
+
+  @@index([status, createdAt]) // officer queue: filter + risk ordering
+  @@index([sessionId, createdAt])
 }
 
 model OtpCode {
   id        String   @id @default(cuid())
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id])
-  code      String
+  // Keyed hash of the 6-digit code — the PLAINTEXT is never persisted
+  // (deep-review P1-8). Demo visibility returns the code to the client at
+  // ISSUANCE time only (demo mode + explicit flag), never from storage.
+  codeHash  String
   purpose   String   @default("step_up_transfer")
   // Binding: the OTP only verifies the staged intent it was issued for — a
   // second transfer request invalidates earlier codes (see transfer.ts).
   stagedActionId String?
+  // HMAC fingerprint of (session, staged action, destination, amount,
+  // beneficiary): a code issued for one transaction summary cannot verify a
+  // modified destination or amount (deep-review P1-8 binding).
+  boundFingerprint String?
+  deliveryStatus String @default("issued") // issued | demo_revealed | provider_pending | delivered | failed
   consumed  Boolean  @default(false)
   attempts  Int      @default(0)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([expiresAt]) // expiry sweep
 }
 
 model IdempotencyKey {
@@ -185,8 +220,19 @@ model IdempotencyKey {
 // Audit: append-only, hash-chained (tamper-evident)
 // ---------------------------------------------------------------------------
 
+// Per-org monotonic sequence allocator: the row is UPDATED (row-locked) inside
+// the append transaction, so concurrent writers serialise per tenant on both
+// SQLite (single-writer) and PostgreSQL (row lock held to commit) — the
+// concurrency-safe append strategy the production design requires (ADR-006).
+model AuditOrgCounter {
+  orgId   String @id
+  lastSeq Int    @default(0)
+}
+
 model AuditEvent {
   id        Int      @id @default(autoincrement())
+  orgId     String   @default("hazina-demo") // tenant/organization scope
+  seq       Int // per-org monotonic (gap-free under verification)
   sessionId String?
   session   ChatSession? @relation(fields: [sessionId], references: [id])
   actor     String // customer:<id> | approver:<id> | system:<node>
@@ -194,7 +240,32 @@ model AuditEvent {
   payload   String // JSON, PII-redacted
   prevHash  String
   hash      String
+  requestId String? // correlation id from the API request envelope
+  traceId   String? // distributed trace id (propagated by the edge/proxy)
+  schemaVersion Int @default(1) // event payload schema — verification compat
+  retentionUntil DateTime? // retention/checkpoint metadata (archival boundary)
   createdAt DateTime @default(now())
+
+  @@unique([orgId, seq]) // DB-level guarantee: no duplicate/lost sequence
+  @@index([orgId, seq])
+  @@index([sessionId, id]) // session projections read in append order
+}
+
+// Signed archival checkpoints (deep-review P1-6): freezing the chain head at
+// seq N with an HMAC-signed root lets older events be archived away while
+// verification stays provable from the checkpoint forward. Checkpoints chain
+// to each other (prevCheckpointHash) — a signed, append-only summary chain.
+model AuditCheckpoint {
+  id        String   @id @default(cuid())
+  orgId     String
+  lastSeq   Int // covers events 1..lastSeq of the org chain
+  eventCount Int
+  rootHash  String // hash of the event at lastSeq (chain head at freeze time)
+  prevCheckpointHash String? // links checkpoints into their own chain
+  signature String // HMAC-SHA256 over (orgId, lastSeq, rootHash) — demo signing; KMS in production
+  signedAt  DateTime @default(now())
+
+  @@index([orgId, lastSeq])
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +285,11 @@ model TariffRow {
   effectiveDate String // "2026-10-22"
   docId         String
   page          Int
+
+  // Tariff band identity is enforced by the DATABASE, not by a findFirst
+  // convention — concurrent/repeated seeds cannot create duplicate or
+  // shadowing bands (deep-review P1-5).
+  @@unique([product, channel, bandMin, effectiveDate])
 }
 
 model KnowledgeChunk {

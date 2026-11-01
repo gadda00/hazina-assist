@@ -94,6 +94,32 @@ export function deploymentViolations(env: DeploymentEnv = process.env): Deployme
       message: "operational mode requires a configured OTP delivery provider before transfers can run",
     });
   }
+  // Durable external state (deep-review P0-3): SQLite, local files, /tmp and
+  // in-memory databases are demo postures — every write (audit, OTP,
+  // approvals, idempotency, balances) can vanish on recycle and separate
+  // instances can diverge. Operational mode refuses to boot on them.
+  const dbUrl = env.DATABASE_URL?.trim() ?? "";
+  if (!dbUrl) {
+    v.push({
+      check: "DATABASE_URL",
+      message: "operational mode requires an explicit durable database URL",
+    });
+  } else if (dbUrl.startsWith("file:") || dbUrl.includes("/tmp") || dbUrl.includes(":memory:")) {
+    v.push({
+      check: "DATABASE_URL",
+      message:
+        "operational mode rejects SQLite/local-file/tmp databases — point DATABASE_URL at a durable external database (e.g. PostgreSQL)",
+    });
+  }
+  // Telemetry posture: the metrics endpoint must be scrape-authorized with a
+  // real token, not the officer-session fallback a demo dashboard relies on.
+  const metricsToken = env.HAZINA_METRICS_TOKEN?.trim() ?? "";
+  if (metricsToken.length < 16) {
+    v.push({
+      check: "HAZINA_METRICS_TOKEN",
+      message: "operational mode requires a metrics scrape token of at least 16 characters (HAZINA_METRICS_TOKEN)",
+    });
+  }
   v.push({
     check: "identity",
     message:

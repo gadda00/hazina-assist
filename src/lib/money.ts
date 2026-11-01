@@ -41,6 +41,29 @@ export function parseAmountKes(raw: number | null | undefined): number | null {
   return roundKes(raw)
 }
 
+/**
+ * STRICT money-input validation for consequential writes (deep-review P1-5).
+ * Unlike parseAmountKes (display-tolerant, rounds sub-cent input), this
+ * REJECTS anything the cents domain cannot represent exactly:
+ *   - NaN / ±Infinity / negative zero (-0 === 0 but signals a broken sender);
+ *   - zero and negative amounts;
+ *   - sub-cent precision (10.001 is refused, never silently rounded);
+ *   - out-of-range values above the operational limit.
+ * Transfers are staged only through this gate — persisted money can always
+ * be expressed in exact integer cents.
+ */
+export function parseAmountStrictKes(raw: number | null | undefined): number | null {
+  if (raw == null || typeof raw !== "number") return null
+  if (!Number.isFinite(raw)) return null // NaN, +Inf, -Inf
+  if (raw === 0 || Object.is(raw, -0)) return null // zero and negative zero
+  if (raw < 0) return null
+  if (raw > 1_000_000_000) return null
+  const cents = Math.round(raw * 100)
+  // exact 2dp representation only: 10.001 → cents 1000 ≠ 1000.1 → rejected
+  if (Math.abs(cents - raw * 100) > 1e-9) return null
+  return cents / 100
+}
+
 /** "KES 12,345.50" / "12,345.5" — display formatting, single source of truth. */
 export function formatKes(kes: number | null | undefined): string {
   const v = kes ?? 0

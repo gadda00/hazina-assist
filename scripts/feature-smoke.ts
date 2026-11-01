@@ -3,7 +3,9 @@
  * Tests every showcase flow: chat paths, tools, transfer HITL + OTP,
  * guardrails, officer console (approvals, audit, evals, monitoring, tools).
  */
-const BASE = "http://localhost:3000";
+// HAZINA_BASE_URL overrides the target (scripts/vercel-sim-smoke.py parity);
+// default stays the local dev port.
+const BASE = process.env.HAZINA_BASE_URL ?? "http://localhost:3000";
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = "") => {
   if (cond) { pass++; console.log(`  ✓ ${name} ${extra}`); }
@@ -161,7 +163,11 @@ ok("officer login", off.session.role === "officer");
   const open = (d.tasks ?? []).filter((t) => t.status === "open");
   ok("queue has open transfer + loan pack (curated)", open.some((t) => t.type === "transfer") && open.some((t) => t.type === "loan_pack"), `open=${open.length}`);
   const decided = (d.tasks ?? []).filter((t) => t.status !== "open");
-  ok("queue shows decided history (approved + rejected)", decided.some((t) => t.status === "approved") && decided.some((t) => t.status === "rejected"), `decided=${decided.length}`);
+  ok(
+    "queue shows decided history (executed + rejected)",
+    decided.some((t) => t.status === "executed") && decided.some((t) => t.status === "rejected"),
+    `decided=${decided.length} statuses=${[...new Set(decided.map((t) => t.status))].join(",")}`
+  );
   ok("loan-pack payload shows customer NAME (not id)", (d.tasks ?? []).every((t) => t.type !== "loan_pack" || typeof t.payload?.customer !== "string" || !/^cm[a-z0-9]{20,}$/.test(t.payload.customer)), `sample=${d.tasks?.find((t) => t.type === "loan_pack")?.payload?.customer}`);
 }
 

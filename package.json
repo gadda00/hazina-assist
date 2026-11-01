@@ -15,7 +15,8 @@
     "db:reset": "prisma migrate reset",
     "eval": "bun run src/eval/run.ts",
     "seed": "bun run prisma/seed.ts",
-    "test": "bun test",
+    "test": "bun test ./tests/",
+    "verify": "bun run scripts/verify.ts",
     "vercel-build": "bash scripts/vercel-build.sh"
   },
   "dependencies": {

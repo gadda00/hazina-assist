@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getChain } from "@/lib/audit";
-import { verifyChain } from "@hazina/kit";
+import { getChain, verifyDbChain, verifySessionProjection, DEFAULT_ORG } from "@/lib/audit";
 import { requireDemoOfficer } from "@/lib/authz";
 import { db } from "@/lib/db";
 import { ERR, reqId } from "@/lib/schemas";
@@ -8,13 +7,20 @@ import { ERR, reqId } from "@/lib/schemas";
 /** GET /api/audit?sessionId=&limit= — hash-chained audit viewer + chain proof.
  *  Officer-only (audit is console surface, not customer surface).
  *
- *  VERIFIED RANGE HONESTY (deep-review P2-9): verification recomputes the
- *  chain over the newest ≤10,000 events, and the response says exactly that —
- *  `coverage` is "full-history" only when every event in the table was
- *  checked, otherwise "suffix-window" with both counts. The chain is
- *  tamper-evident within the verified range; it is NOT immutable storage —
- *  a privileged DB writer could still rewrite history and recompute hashes.
- *  Anchoring to independent storage is future work (see threat-model). */
+ *  VERIFICATION (deep-review P1-6): the whole per-org chain is recomputed —
+ *  org-scoped sequences, prev-hash links, payload hash recomputation, and the
+ *  signed archival checkpoint chain. The FIRST broken link is reported with
+ *  its exact position and failure kind. A session filter NEVER weakens the
+ *  answer: the session projection is additionally proven against its
+ *  surrounding org-chain links.
+ *
+ *  VERIFIED RANGE HONESTY (deep-review P2-9): the response says exactly what
+ *  was checked — `coverage` is "full-history" only when every surviving event
+ *  was verified, and events archived under a signed checkpoint are reported
+ *  as `archivedUnder`. The chain is tamper-evident within the verified range;
+ *  it is NOT immutable storage — a privileged DB writer could still rewrite
+ *  history and recompute hashes. Anchoring to independent storage is future
+ *  work (see threat-model). */
 export async function GET(req: Request) {
   const auth = await requireDemoOfficer(req);
   if (!auth.ok) return auth.response;
@@ -25,35 +31,37 @@ export async function GET(req: Request) {
     const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get("limit") ?? "120", 10) || 120));
     const rows = await getChain(limit, sessionId);
 
-    // Verification ALWAYS runs over the FULL global chain, not the session
-    // slice: session events interleave with other sessions', so a filtered
-    // slice can never verify standalone (its first prevHash points back into
-    // the shared chain). The trust answer is "the one chain containing this
-    // session's events is intact" — and that is what we recompute here.
-    const all = await getChain(10_000);
-    const verification = verifyChain(
-      all.map((r) => ({ payload: r.payload, prevHash: r.prevHash, hash: r.hash }))
-    );
+    const verification = await verifyDbChain();
+    const projection = sessionId ? await verifySessionProjection(sessionId) : null;
     const totalInDb = await db.auditEvent.count();
-    const verifiedCount = verification.length;
 
     return NextResponse.json({
       events: rows.map((r) => ({
         id: r.id,
+        seq: r.seq,
+        orgId: r.orgId,
         sessionId: r.sessionId,
         actor: r.actor,
         eventType: r.eventType,
         payload: JSON.parse(r.payload),
         prevHash: r.prevHash.slice(0, 16),
         hash: r.hash,
+        requestId: r.requestId,
         createdAt: r.createdAt,
       })),
       verification: {
-        ok: verification.ok,
-        brokenAt: verification.brokenAt,
-        verifiedEvents: verifiedCount,
+        ok: verification.ok && (projection?.ok ?? true),
+        brokenAt: verification.brokenLink ? verification.brokenLink.seq : null,
+        brokenLink: verification.brokenLink,
+        sessionProjection: projection,
+        verifiedEvents: verification.checkedEvents,
         totalEventsInDb: totalInDb,
-        coverage: verifiedCount >= totalInDb ? "full-history" : "suffix-window (newest 10,000)",
+        orgs: verification.orgs.length > 0 ? verification.orgs : [{ orgId: DEFAULT_ORG, events: 0, headSeq: 0 }],
+        checkpoints: verification.checkpoints,
+        coverage:
+          verification.checkedEvents >= totalInDb
+            ? "full-history"
+            : `suffix-window (newest ${Math.min(totalInDb, 10_000)})`,
         checkedAt: new Date().toISOString(),
       },
     });

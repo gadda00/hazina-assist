@@ -229,8 +229,32 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
     return { reply, route: "transfer", kind: "transfer_policy_blocked" };
   }
 
-  // C. Policy passed → step-up OTP
+  // C. Policy passed → stage the intent, then step-up OTP.
+  // The intent is staged FIRST so the OTP binds to THIS transaction summary
+  // (session + staged action + destination + amount + beneficiary) — a code
+  // issued for one transfer can never verify a modified one.
+  await db.pendingAction.deleteMany({ where: { sessionId: ctx.sessionId, kind: "intent_staged" } });
+  await db.pendingAction.create({
+    data: {
+      sessionId: ctx.sessionId,
+      kind: "intent_staged",
+      payload: JSON.stringify({ proposal: { ...proposal, riskLevel: gate.riskLevel }, acctId: gate.acct.id }),
+    },
+  });
   const otp = await issueOtp(ctx.sessionId);
+  if (!otp.ok) {
+    // issue rate limits: cooldown / per-hour cap — refuse loudly, never
+    // pretend a code was sent (deep-review P1-8).
+    const mins = Math.ceil((otp.retryInSeconds ?? 60) / 60);
+    return {
+      reply:
+        lang === "sw"
+          ? `Kwa usalama, nimeweka kikomo cha msimbo kwa muda. Tafadhali subiri dakika ${mins} kabla ya kuomba msimbo mpya.`
+          : `For security, verification codes are rate-limited. Please wait about ${mins} minute${mins === 1 ? "" : "s"} before requesting a new code — your transfer details are saved.`,
+      route: "transfer",
+      kind: "otp_rate_limited",
+    };
+  }
   // Fee transparency BEFORE the customer confirms with OTP — the charge is
   // computed from the same deterministic tariff table used at execution, so
   // the number shown here can never drift from what is later debited.
@@ -247,13 +271,6 @@ async function transferNode(ctx: RunCtx, input: string, lang: string): Promise<P
       : lang === "sw"
         ? `Tuma hili halina ada (bila malipo).`
         : `This send carries no fee.`;
-  await db.pendingAction.create({
-    data: {
-      sessionId: ctx.sessionId,
-      kind: "intent_staged",
-      payload: JSON.stringify({ proposal: { ...proposal, riskLevel: gate.riskLevel }, acctId: gate.acct.id }),
-    },
-  });
   await appendEvent({
     sessionId: ctx.sessionId,
     actor: "system:transfer",

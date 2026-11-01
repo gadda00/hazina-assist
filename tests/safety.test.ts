@@ -150,6 +150,11 @@ describe("OTP step-up", () => {
   let customerId = "";
 
   beforeAll(async () => {
+    // rate-limit overrides for deterministic back-to-back issuance in tests
+    // (production defaults: 30s cooldown, 5 codes/hour/session — exercised in
+    // tests/transfer-state.test.ts with explicit limit values)
+    process.env.HAZINA_OTP_COOLDOWN_MS = "0";
+    process.env.HAZINA_OTP_MAX_PER_HOUR = "100";
     const c = await db.customer.upsert({
       where: { phone: PHONE },
       update: {},
@@ -163,6 +168,8 @@ describe("OTP step-up", () => {
   });
 
   afterAll(async () => {
+    delete process.env.HAZINA_OTP_COOLDOWN_MS;
+    delete process.env.HAZINA_OTP_MAX_PER_HOUR;
     await db.otpCode.deleteMany({ where: { sessionId } });
     await db.pendingAction.deleteMany({ where: { sessionId } });
     await db.chatSession.deleteMany({ where: { id: sessionId } });
@@ -172,20 +179,36 @@ describe("OTP step-up", () => {
   test("codes are 6-digit and crypto-random (distinct across issues)", async () => {
     const a = await issueOtp(sessionId);
     const b = await issueOtp(sessionId);
+    if (!a.ok || !b.ok) throw new Error("issueOtp unexpectedly refused (limits overridden for tests)");
     expect(a.code).toMatch(/^\d{6}$/);
     expect(b.code).toMatch(/^\d{6}$/);
     expect(a.code).not.toBe(b.code); // overwhelmingly likely for random
   });
 
+  test("the plaintext code is never persisted — only its keyed hash", async () => {
+    const otp = await issueOtp(sessionId);
+    if (!otp.ok) throw new Error("issueOtp unexpectedly refused");
+    const rows = await db.otpCode.findMany({ where: { sessionId } });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.codeHash).toMatch(/^[0-9a-f]{64}$/);
+      // no column may contain the plaintext, and the hash must not be the
+      // raw code in disguise (sha256 of the code would also leak via lookup)
+      expect(JSON.stringify(r)).not.toContain(otp.code);
+    }
+  });
+
   test("a second issuance invalidates the first (single active OTP)", async () => {
     const first = await issueOtp(sessionId);
     await issueOtp(sessionId); // reissue
+    if (!first.ok) throw new Error("issueOtp unexpectedly refused");
     const v = await verifyOtp(sessionId, first.code);
     expect(v.ok).toBe(false);
   });
 
   test("three wrong attempts lock the code", async () => {
     const otp = await issueOtp(sessionId);
+    if (!otp.ok) throw new Error("issueOtp unexpectedly refused");
     await verifyOtp(sessionId, "000000");
     await verifyOtp(sessionId, "111111");
     const third = await verifyOtp(sessionId, "222222");
@@ -197,11 +220,15 @@ describe("OTP step-up", () => {
 
   test("expired code is rejected as otp_expired", async () => {
     const otp = await issueOtp(sessionId);
+    if (!otp.ok) throw new Error("issueOtp unexpectedly refused");
+    // OTPs are stored as keyed HASHES — locate the row by recency, never by
+    // plaintext (the plaintext is not persisted at all).
     const row = await db.otpCode.findFirst({
-      where: { sessionId, code: otp.code },
+      where: { sessionId },
       orderBy: { createdAt: "desc" },
     });
     expect(row).toBeTruthy();
+    expect(row!.codeHash).toMatch(/^[0-9a-f]{64}$/); // HMAC-SHA256 hex
     await db.otpCode.update({
       where: { id: row!.id },
       data: { expiresAt: new Date(Date.now() - 1000) },
@@ -213,6 +240,7 @@ describe("OTP step-up", () => {
 
   test("correct code verifies and consumes", async () => {
     const otp = await issueOtp(sessionId);
+    if (!otp.ok) throw new Error("issueOtp unexpectedly refused");
     const v = await verifyOtp(sessionId, otp.code);
     expect(v.ok).toBe(true);
     const replay = await verifyOtp(sessionId, otp.code);

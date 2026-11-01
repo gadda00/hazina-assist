@@ -15,28 +15,24 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile || bun install
+      - run: bun install --frozen-lockfile
       - run: bun run lint
       # typecheck is a HARD gate — no `|| echo` escape (see scripts and
       # tsconfig: only project dirs are included, sandbox scaffolding excluded)
       - run: bun run typecheck
 
   unit-tests:
-    name: unit + contract tests
+    name: unit + contract tests (self-contained)
     runs-on: ubuntu-latest
-    env:
-      # CI has no .env (untracked locally); the DB is a throwaway sqlite file
-      # seeded fresh each run. /tmp is always writable on the runner.
-      DATABASE_URL: "file:/tmp/hazina-ci.db"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile || bun install
-      - name: Push schema + seed
-        run: |
-          bun run db:push
-          bun run seed
-      - run: bun test
+      - run: bun install --frozen-lockfile
+      # SELF-CONTAINED (deep-review P0-2): tests/preload provisions an
+      # ISOLATED throwaway SQLite DB (schema + seed) before any test file
+      # imports Prisma. No db:push/seed step, no shared mutable CI database,
+      # no DATABASE_URL env — a clean checkout runs green as-is.
+      - run: bun run test
 
   # ------------------------------------------------- the eval gate (differentiator)
   eval-gate:
@@ -47,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile || bun install
+      - run: bun install --frozen-lockfile
       - run: |
           bun run db:push
           bun run seed
@@ -150,7 +146,7 @@ jobs:
           python-version: "3.12"
       - run: pip install pip-audit && pip-audit -r services/categoriser/requirements.txt || true
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile || bun install
+      - run: bun install --frozen-lockfile
       - run: bunx better-npm-audit audit || true   # advisory: findings triaged manually
 
   container-scan:
@@ -171,9 +167,29 @@ jobs:
           name: sbom
           path: sbom.json
 
+  # --------------------------------------------------- single-command verify
+  # The acceptance command from the deep review: `bun run verify` must pass
+  # from a CLEAN checkout with no undocumented manual setup. It provisions
+  # isolated DBs, runs lint + typecheck + tests + the eval gate + the
+  # type-validated production build, and writes the machine-readable summary
+  # to docs/eval/verification.json (uploaded as an artifact every run).
+  verify:
+    name: bun run verify (clean checkout)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-summary
+          path: docs/eval/verification.json
+
   # ---------------------------------------------------------------------- build
   build:
-    name: production build
+    name: production build (type-validated)
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, eval-gate]
     env:
@@ -181,7 +197,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile || bun install
+      - run: bun install --frozen-lockfile
       - run: bun run db:push
       - run: bun run build
       # image signing (cosign) runs in the release pipeline once registry

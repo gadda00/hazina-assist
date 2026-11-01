@@ -14,7 +14,11 @@ import { Prisma } from "@prisma/client";
 
 export interface CoreResult<T> {
   messageReference: string;
-  status: "success" | "duplicate" | "failed";
+  /** "timeout" = AMBIGUOUS provider outcome (effect may or may not have
+   *  landed) — the executor's contract resolves it with one idempotent retry,
+   *  never by assuming failure. The default mock provider never returns it;
+   *  injected/faulting adapters and real providers do. */
+  status: "success" | "duplicate" | "failed" | "timeout";
   responseCode: string;
   responseDescription: string;
   data?: T;

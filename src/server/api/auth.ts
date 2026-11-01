@@ -44,6 +44,9 @@ export async function POST(req: Request) {
   const { customerId, as } = parsed.data;
 
   try {
+    // Symmetric with GET: a first-ever POST login (no prior directory read)
+    // must not mint a session into an empty, un-curated database.
+    await ensureSeeded();
     // Demo login RESUMES the customer's live session when one exists, so the
     // curated history (warm chat, staged transfers, receipts) is visible
     // immediately after sign-in and the audit chain stays continuous.
@@ -104,6 +107,22 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
+  // DIRECTORY LISTING IS DEMO-ONLY (deep-review P1-7): a public endpoint that
+  // enumerates customers and officers is part of the synthetic identity
+  // picker. In operational mode it is disabled outright — no customer
+  // directory may exist behind a real IdP boundary.
+  if (deploymentMode() !== "demo") {
+    return NextResponse.json(
+      {
+        error: {
+          code: "directory_disabled",
+          message:
+            "The demo directory is disabled in operational mode. Identity comes from the organizational IdP — customer enumeration is not an exposed capability.",
+        },
+      },
+      { status: 403 }
+    );
+  }
   // Auto-heal (see src/lib/ensure-seed.ts): a re-provisioned demo DB with
   // schema but zero rows would render this directory — and every screen
   // after it — blank. The first call rebuilds reference data (awaited) and

@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { decideApprovalTask } from "@/lib/approvals";
+import { decideApprovalTask, reconcileStuckTasks } from "@/lib/approvals";
 import { requireDemoOfficer } from "@/lib/authz";
 import { ApprovalPostSchema, ERR, parseBody, reqId } from "@/lib/schemas";
 
-/** GET /api/approvals — the HITL queue (transfers + loan packs). Officer-only. */
+/** GET /api/approvals — the HITL queue (transfers + loan packs). Officer-only.
+ *  Crash recovery runs lazily on every read: tasks abandoned mid-execution
+ *  (crashed claim past its lease) are reconciled against the durable intent
+ *  state BEFORE the queue is rendered, so the console never shows a phantom
+ *  "in-flight" task that no process is actually executing. */
 export async function GET(req: Request) {
   const auth = await requireDemoOfficer(req);
   if (!auth.ok) return auth.response;
 
   try {
+    await reconcileStuckTasks();
     const tasks = await db.approvalTask.findMany({
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: 100,
@@ -75,7 +80,14 @@ export async function POST(req: Request) {
       case "unknown_type":
         return ERR.validation(`unknown task type: ${r.type}`, reqId(req));
       case "execution_refused":
-        return NextResponse.json({ ok: false, reason: r.reason });
+        return NextResponse.json({ ok: false, reason: r.reason, retryable: r.retryable ?? false, attempts: r.attempts });
+      case "in_progress":
+        // a live claim is executing this task right now (or its lease has not
+        // expired) — the officer UI surfaces this instead of silently no-op'ing
+        return NextResponse.json(
+          { ok: false, reason: "already_being_executed" },
+          { status: 409 }
+        );
       case "replay":
         return NextResponse.json({
           ok: true,
