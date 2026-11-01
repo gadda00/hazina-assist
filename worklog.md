@@ -204,3 +204,29 @@ Work Log:
 - **metadataBase** set in layout.tsx (NEXT_PUBLIC_SITE_URL overridable) — silences the Next.js warning and makes OG images resolve absolutely on every host.
 - Investigated a suspected ci.yml corruption ("branches: ain]") — proven a display artifact (the `[m` sequence is swallowed as an ANSI escape in tool output; hexdump shows `branches: [main]` intact). No change needed; noted here so it is not "fixed" into breakage later.
 - Verification: tsc clean; eslint clean; bun test 86/86 (was 80/86 at session start — 6 failures caused by the wiped tariff table); eval gate 55/55 PASS (restores the EvalRun record); feature-smoke 33/33; browser-smoke 18/18; zero console errors end-to-end.
+
+---
+Task ID: 7
+Agent: main (Z.ai)
+Task: User supplied "gadda00..ghp_…" — the GitHub account + classic PAT that had blocked the push since the earlier tasks. Unblock and ship both repos; fix anything else encountered along the way.
+
+Work Log:
+- Token verified via API (login gadda00, scopes incl. repo + workflow, admin on gadda00/hazina-assist). Used ONLY via env/HTTP-header auth — never written to .git/config, remotes, or any file. User advised to revoke it after use.
+- Pre-push hygiene on the 4 unpushed commits (nothing had ever left the machine): secret scan clean (.env purge held; no token/key patterns in any diff); the two tool-results read-snapshots inside 013a030 were benign but scrubbed from history anyway.
+- History tidy BEFORE publishing (a post-push rewrite would need force): filter-branch over 0534487..main — dropped the auto-committed one-shot codemod scripts (fix_adapters*.py / fix_map_layers.py — cross-project artifacts whose changes were already applied in the nested firstlight repo), pruned the UUID-message commit that only added them, reworded the other UUID-message commit to its real content ("Demo depth: richer seed corpus, runtime DB auto-heal, accounts rail, guided-tour fixes, refreshed screenshots"). 210 → 207 tracked files.
+- Fixed scripts/push-to-github.sh on first live run: repo-already-exists returns HTTP 422 (was fatal; only 202/409 tolerated) — the script is now idempotent for re-runs.
+- PUSHED main 0534487..5fa3c0f (fast-forward, 4 commits): https://github.com/gadda00/hazina-assist — CI on 5fa3c0f: ALL 11 JOBS GREEN (lint+typecheck, unit+contract, eval gate, categoriser pytest, vercel.json preflight, helm lint+template, gitleaks [full history], semgrep/bandit, pip+bun audit, trivy+SBOM, production build). Pages rebuilt from main /docs at 5fa3c0f — https://gadda00.github.io/hazina-assist/ (200). Homepage/description/14 topics verified via API. Pre-push: the 7 hazina suites 86/86 locally.
+- Discovered /home/z/my-project/firstlight (own git repo, gitignored from hazina): the FirstLight re-review delivery, merged to its main at 325aa94 (186/186 bun tests + 24/24 python egress + 59/59 browser smoke, per docs/verification-summary.json) with 11 commits never pushed (origin at 9a0c53f). NOTE: a root-level `bun test` mixing both projects shows 28 spurious firstlight failures (its relative-path DB tests resolve against hazina's cwd) — from firstlight's own root it is 186/186 green; not hazina regressions.
+- FirstLight shipped to https://github.com/gadda00/firstlight (9a0c53f..6993d9e) after fixing what the first live workflow runs exposed:
+  1. default_workflow_permissions=read made the SARIF upload + GHCR pushes guaranteed failures → explicit per-job permissions (security-events: write / packages: write).
+  2. deploy-staging auto-ran on every main push against placeholder AWS/Slack config (terraform targets + *.example.com are roadmap placeholders) → dispatch-only deploys; no deploy path is claimed until real secrets exist.
+  3. "Cache export is not supported for the docker driver" → docker/setup-buildx-action in both image jobs.
+  4. app image: bun's --production takes no value (install step died) and the runtime CMD used bunx/bun which only exist in the builder stage → npx prisma/next on node:22-alpine.
+  5. worker image: pip-installed the round-3 aspirational stack (GDAL from source with no libgdal, torch, …) that no task imports → honest single-stage image; requirements.txt rewritten to the true runtime set (celery[redis] + boto3 for the lazy MinIO seam); the old pip --user /root/.local under USER python-worker could never execute the celery CLI; .dockerignore added.
+  - Verified on 6993d9e: CI green (incl. the runner-first Playwright e2e — live USGS ingest → review → sitrep → approve → export → bundle → audit), Pages demo live at https://gadda00.github.io/firstlight/, deploy.yml green with both images pushed to ghcr.io/gadda00/firstlight/{app,python-worker}; the regenerated verification-summary.json committed.
+- Dev server untouched throughout and healthy at the end (probe full: ok, DB ok).
+
+Stage Summary:
+- Both repos fully shipped and green on GitHub: hazina-assist (CI 11/11 jobs, Pages showcase, Vercel-ready) and firstlight (CI incl. e2e, Pages demo, GHCR images, honest dispatch-only deploys).
+- Operational lesson recorded: run `bun test` from each repo's own root — a shared root mixes relative-path DBs and produces spurious cross-project failures.
+- SECURITY: the PAT was used only in-memory for these pushes and never persisted; it carries very broad scopes (admin:org, delete_repo, workflow, …) — the user should revoke it now that the pushes are done.
