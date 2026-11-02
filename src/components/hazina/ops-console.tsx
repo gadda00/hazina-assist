@@ -24,6 +24,9 @@ import { advanceTourTo } from "@/lib/tour";
 
 type ConsoleTab = "approvals" | "packs" | "audit" | "evals" | "monitor";
 
+const TAB_CLASSES =
+  "gap-1.5 data-[state=active]:bg-gold-500/15 data-[state=active]:text-gold-200 data-[state=active]:shadow-[inset_0_0_0_1px_oklch(0.76_0.13_85/0.35)] text-vault-300";
+
 export function OpsConsole({ session }: { session: SessionInfo }) {
   const [tab, setTab] = useState<ConsoleTab>("approvals");
   // tour progress marker: bumping this re-renders the banner after decisions
@@ -37,30 +40,34 @@ export function OpsConsole({ session }: { session: SessionInfo }) {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 lg:py-6">
       <TourBanner tick={tourTick} />
-      <div className="mb-4 flex items-center gap-2 flex-wrap">
-        <HazinaMark className="h-6 w-6" />
-        <h1 className="text-lg font-semibold text-slate-900">Operations console</h1>
-        <span className="text-xs text-slate-500">
-          human-in-the-loop, audit verification, evaluation & monitoring
+      <div className="mb-5 flex items-center gap-3.5 flex-wrap">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-gold-500/35 bg-gold-500/10">
+          <HazinaMark className="h-6 w-6" />
         </span>
+        <div>
+          <h1 className="font-display text-xl font-semibold text-vault-50">Operations console</h1>
+          <span className="text-xs font-mono text-vault-400">
+            human-in-the-loop · audit verification · evaluation · monitoring
+          </span>
+        </div>
       </div>
       <Tabs value={tab} onValueChange={(v) => setTab(v as ConsoleTab)}>
-        <TabsList className="mb-4 flex-wrap h-auto">
-          <TabsTrigger value="approvals" className="gap-1.5 data-[state=active]:bg-emerald-800 data-[state=active]:text-white">
+        <TabsList className="mb-4 flex-wrap h-auto bg-vault-850/70 border border-vault-700/60 rounded-xl p-1 backdrop-blur">
+          <TabsTrigger value="approvals" className={TAB_CLASSES}>
             <ClipboardCheck className="h-4 w-4" /> Approval queue
           </TabsTrigger>
-          <TabsTrigger value="packs" className="gap-1.5 data-[state=active]:bg-emerald-800 data-[state=active]:text-white">
+          <TabsTrigger value="packs" className={TAB_CLASSES}>
             <FileSearch className="h-4 w-4" /> Loan packs
           </TabsTrigger>
-          <TabsTrigger value="audit" className="gap-1.5 data-[state=active]:bg-emerald-800 data-[state=active]:text-white">
+          <TabsTrigger value="audit" className={TAB_CLASSES}>
             <Lock className="h-4 w-4" /> Audit chain
           </TabsTrigger>
-          <TabsTrigger value="evals" className="gap-1.5 data-[state=active]:bg-emerald-800 data-[state=active]:text-white">
+          <TabsTrigger value="evals" className={TAB_CLASSES}>
             <FlaskConical className="h-4 w-4" /> Evaluations
           </TabsTrigger>
-          <TabsTrigger value="monitor" className="gap-1.5 data-[state=active]:bg-emerald-800 data-[state=active]:text-white">
+          <TabsTrigger value="monitor" className={TAB_CLASSES}>
             <Gauge className="h-4 w-4" /> Monitoring
           </TabsTrigger>
         </TabsList>
@@ -194,38 +201,38 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
-        <Loader2 className="h-4 w-4 animate-spin" /> loading queue…
+      <div className="flex items-center gap-2.5 text-vault-400 text-sm py-10 justify-center font-mono">
+        <Loader2 className="h-4 w-4 animate-spin text-jade-400" /> loading queue…
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <Card className="border-slate-200">
+      <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-600">
-            <b className="text-slate-900">{open.length}</b> open task{open.length === 1 ? "" : "s"} awaiting a human decision.
+          <div className="text-sm text-vault-300">
+            <b className="text-gold-200 font-display text-base">{open.length}</b> open task{open.length === 1 ? "" : "s"} awaiting a human decision.
             Transfers execute only after signature, expiry &amp; nonce verification.
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700 text-[10px]">
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              <Badge variant="outline" className="border-violet-700/60 bg-violet-950/40 text-violet-300 text-[10px] font-mono">
                 {stat.transfers} transfer{stat.transfers === 1 ? "" : "s"}
               </Badge>
-              <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700 text-[10px]">
+              <Badge variant="outline" className="border-jade-700/60 bg-jade-950/40 text-jade-300 text-[10px] font-mono">
                 {stat.packs} loan pack{stat.packs === 1 ? "" : "s"}
               </Badge>
-              <Badge variant="outline" className={`text-[10px] ${stat.highRisk > 0 ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-500"}`}>
+              <Badge variant="outline" className={`text-[10px] font-mono ${stat.highRisk > 0 ? "border-red-800/70 bg-red-950/50 text-red-300" : "border-vault-700/60 text-vault-500"}`}>
                 {stat.highRisk} high risk
               </Badge>
-              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
+              <Badge variant="outline" className="border-jade-700/60 bg-jade-950/40 text-jade-300 text-[10px] font-mono">
                 {stat.executed} executed
               </Badge>
               {stat.failed > 0 ? (
-                <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 text-[10px]">
+                <Badge variant="outline" className="border-gold-700/60 bg-gold-950/40 text-gold-300 text-[10px] font-mono">
                   {stat.failed} execution failed (retryable)
                 </Badge>
               ) : null}
-              <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-[10px]">
+              <Badge variant="outline" className="border-vault-700/60 bg-vault-850/60 text-vault-500 text-[10px] font-mono">
                 {stat.rejected} rejected
               </Badge>
             </div>
@@ -233,12 +240,12 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
           <div className="flex items-center gap-2">
             {/* server-derived identity: read-only, from the officer session —
                 the audit chain records THIS identity, never a typed name */}
-            <span className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 rounded-full px-2.5 py-1 bg-slate-50">
-              <Lock className="h-3 w-3 text-emerald-700" aria-hidden />
-              acting as <b className="text-slate-700">{officerName}</b>
-              <span className="text-slate-400">(from session)</span>
+            <span className="flex items-center gap-1.5 text-xs text-vault-400 border border-vault-700/60 rounded-full px-2.5 py-1 bg-vault-850/60 font-mono">
+              <Lock className="h-3 w-3 text-jade-400" aria-hidden />
+              acting as <b className="text-vault-200">{officerName}</b>
+              <span className="text-vault-600">(from session)</span>
             </span>
-            <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={load} className="gap-1.5 border-vault-600 text-vault-300 hover:bg-vault-800 hover:text-gold-200">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </Button>
           </div>
@@ -246,7 +253,7 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
       </Card>
 
       {open.length === 0 && (
-        <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-xl">
+        <div className="text-center text-sm text-vault-500 py-12 border border-dashed border-vault-700/60 rounded-2xl bg-vault-900/40">
           Queue is empty. Stage a transfer in the chat (quick prompt &ldquo;Transfer → HITL&rdquo;) to
           see the approval flow end-to-end.
         </div>
@@ -267,40 +274,41 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
           validationOk?: boolean;
         };
         return (
-          <Card key={t.id} className="border-slate-200">
-            <CardContent className="p-4 space-y-3">
+          <Card key={t.id} className="hairline-gold rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl shadow-[0_18px_50px_-24px_oklch(0.08_0.01_170/0.9)]">
+            {/* NOTE: space-y-3 kept — browser smoke locates this card via this class */}
+            <CardContent className="p-5 space-y-3">
               <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="border-violet-300 bg-violet-50 text-violet-700">
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="border-violet-700/60 bg-violet-950/40 text-violet-300 font-mono">
                       {t.type === "transfer" ? "Transfer intent" : "Loan pack"}
                     </Badge>
                     <RiskBadge risk={t.riskLevel} />
-                    <span className="text-[11px] text-slate-400 font-mono">{t.id.slice(-8)}</span>
+                    <span className="text-[11px] text-vault-600 font-mono">{t.id.slice(-8)}</span>
                   </div>
-                  <div className="text-2xl font-semibold text-slate-900">
+                  <div className="font-display text-3xl font-semibold text-gold-200 tabular-nums tracking-tight">
                     KES {Number(p.amountKes ?? p.requestedAmountKes ?? 0).toLocaleString()}
                   </div>
-                  <div className="text-sm text-slate-600">
+                  <div className="text-sm text-vault-300">
                     {t.type === "transfer" ? (
                       <>
-                        {p.customer} · from {p.fromAccount} → <b>{p.beneficiary}</b>{" "}
-                        <span className="font-mono text-xs">{String(p.destination)}</span> via{" "}
-                        {String(p.destinationType).toUpperCase()}
+                        {p.customer} · from <span className="font-mono text-jade-300">{p.fromAccount}</span> → <b className="text-vault-100">{p.beneficiary}</b>{" "}
+                        <span className="font-mono text-xs text-vault-400">{String(p.destination)}</span> via{" "}
+                        <span className="font-mono text-xs text-gold-300">{String(p.destinationType).toUpperCase()}</span>
                         {p.purpose ? ` · ${p.purpose}` : ""}
                       </>
                     ) : (
                       <>
-                        {p.customer} · {p.fileName} · net KES {Number(p.netKes ?? 0).toLocaleString()} ·{" "}
-                        validation {p.validationOk ? "passed" : "flagged"}
+                        {p.customer} · {p.fileName} · net <span className="text-gold-300">KES {Number(p.netKes ?? 0).toLocaleString()}</span> ·{" "}
+                        validation {p.validationOk ? <span className="text-jade-300">passed</span> : <span className="text-red-400">flagged</span>}
                       </>
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button
                     size="sm"
-                    className="bg-emerald-700 hover:bg-emerald-600 gap-1.5"
+                    className="bg-gradient-to-br from-jade-500 to-jade-700 text-white hover:from-jade-400 hover:to-jade-600 gap-1.5 shadow-[0_6px_20px_-8px_oklch(0.55_0.11_163/0.7)]"
                     disabled={!!acting}
                     onClick={() => requestDecision(t, "approve")}
                   >
@@ -310,7 +318,7 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
                   <Button
                     size="sm"
                     variant="outline"
-                    className="border-red-300 text-red-700 hover:bg-red-50 gap-1.5"
+                    className="border-red-800/70 text-red-300 hover:bg-red-950/50 hover:text-red-200 gap-1.5"
                     disabled={!!acting}
                     onClick={() => requestDecision(t, "reject")}
                   >
@@ -319,8 +327,8 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
                   </Button>
                 </div>
               </div>
-              <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <div className="text-[11px] text-vault-500 flex items-center gap-1.5 font-mono">
+                <ShieldCheck className="h-3.5 w-3.5 text-jade-500" />
                 Execution verifies HMAC signature, TTL expiry and single-use nonce, then calls the core
                 API with an idempotency key.
               </div>
@@ -331,22 +339,22 @@ function ApprovalsTab({ session, onDecided }: { session: SessionInfo; onDecided:
 
       {decided.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">recent decisions</div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500">recent decisions</div>
           {decided.map((t) => (
-            <div key={t.id} className="flex items-center justify-between text-xs text-slate-500 border border-slate-100 rounded-lg px-3 py-2">
-              <span className="font-mono">{t.id.slice(-8)}</span>
+            <div key={t.id} className="flex items-center justify-between gap-2 text-xs text-vault-400 border border-vault-700/50 rounded-xl px-3.5 py-2.5 bg-vault-900/50 font-mono">
+              <span className="text-vault-600">{t.id.slice(-8)}</span>
               <span>
-                {t.type} · KES {Number(t.payload.amountKes ?? t.payload.requestedAmountKes ?? 0).toLocaleString()}
+                {t.type} · <span className="text-gold-300">KES {Number(t.payload.amountKes ?? t.payload.requestedAmountKes ?? 0).toLocaleString()}</span>
               </span>
               <span className="flex items-center gap-1.5">
                 {t.status === "executed" ? (
-                  <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> executed{t.decidedBy ? ` · ${t.decidedBy}` : ""}</>
+                  <><CheckCircle2 className="h-3.5 w-3.5 text-jade-400" /> executed{t.decidedBy ? ` · ${t.decidedBy}` : ""}</>
                 ) : t.status === "execution_failed" ? (
-                  <><AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> execution failed{t.reason ? ` (${t.reason})` : ""} — retryable</>
+                  <><AlertTriangle className="h-3.5 w-3.5 text-gold-400" /> execution failed{t.reason ? ` (${t.reason})` : ""} — retryable</>
                 ) : t.status === "claiming" || t.status === "executing" ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin text-sky-600" /> {t.status}…</>
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin text-jade-400" /> {t.status}…</>
                 ) : (
-                  <><Ban className="h-3.5 w-3.5 text-red-500" /> rejected{t.reason ? ` (${t.reason})` : ""}</>
+                  <><Ban className="h-3.5 w-3.5 text-red-400" /> rejected{t.reason ? ` (${t.reason})` : ""}</>
                 )}
               </span>
             </div>
@@ -406,40 +414,44 @@ function ConfirmDecisionDialog({
 
   return (
     <AlertDialog open onOpenChange={(o) => !o && onCancel()}>
-      <AlertDialogContent>
+      <AlertDialogContent className="rounded-2xl border-vault-700/70 bg-vault-900/95 backdrop-blur-xl">
         <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
+          <AlertDialogTitle className="flex items-center gap-2.5 font-display text-lg">
             {approve ? (
               <>
-                <KeyRound className="h-5 w-5 text-emerald-700" aria-hidden />
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-jade-700/60 bg-jade-900/40">
+                  <KeyRound className="h-4 w-4 text-jade-300" aria-hidden />
+                </span>
                 {isTransfer ? "Confirm and execute transfer" : "Record officer recommendation"}
               </>
             ) : (
               <>
-                <Ban className="h-5 w-5 text-red-600" aria-hidden />
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-800/60 bg-red-950/50">
+                  <Ban className="h-4 w-4 text-red-300" aria-hidden />
+                </span>
                 Confirm rejection
               </>
             )}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-3 text-sm">
+            <div className="space-y-3 text-sm text-vault-200">
               {isTransfer ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
-                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px]">
-                    <span className="text-slate-500">from</span>
-                    <span className="font-mono text-slate-800">{p.fromAccount} ({p.customer})</span>
-                    <span className="text-slate-500">to</span>
-                    <span className="text-slate-800"><b>{p.beneficiary}</b> <span className="font-mono text-xs">{String(p.destination)}</span> via {String(p.destinationType).toUpperCase()}</span>
-                    <span className="text-slate-500">amount</span>
-                    <span className="font-mono text-slate-800">KES {amount.toLocaleString()}</span>
-                    <span className="text-slate-500">fee</span>
-                    <span className="font-mono text-slate-800">KES {feePreview.toLocaleString()}<span className="text-slate-400"> (tariff band)</span></span>
-                    <span className="text-slate-500">total debit</span>
-                    <span className="font-mono font-semibold text-slate-900">KES {(amount + feePreview).toLocaleString()}</span>
-                    {p.purpose && <><span className="text-slate-500">purpose</span><span className="text-slate-800">{p.purpose}</span></>}
+                <div className="rounded-xl border border-vault-700/60 bg-vault-850/70 p-3.5 space-y-1.5">
+                  <div className="grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 text-[13px]">
+                    <span className="text-vault-500">from</span>
+                    <span className="font-mono text-vault-200">{p.fromAccount} ({p.customer})</span>
+                    <span className="text-vault-500">to</span>
+                    <span className="text-vault-100"><b>{p.beneficiary}</b> <span className="font-mono text-xs text-vault-400">{String(p.destination)}</span> via <span className="text-gold-300">{String(p.destinationType).toUpperCase()}</span></span>
+                    <span className="text-vault-500">amount</span>
+                    <span className="font-mono text-vault-100 tabular-nums">KES {amount.toLocaleString()}</span>
+                    <span className="text-vault-500">fee</span>
+                    <span className="font-mono text-vault-200 tabular-nums">KES {feePreview.toLocaleString()}<span className="text-vault-600"> (tariff band)</span></span>
+                    <span className="text-vault-500">total debit</span>
+                    <span className="font-mono font-semibold text-gold-200 tabular-nums">KES {(amount + feePreview).toLocaleString()}</span>
+                    {p.purpose && <><span className="text-vault-500">purpose</span><span className="text-vault-200">{p.purpose}</span></>}
                   </div>
                   {approve && (
-                    <p className="text-[12px] text-red-700 pt-1">
+                    <p className="text-[12px] text-red-300 pt-1">
                       This action is final: the core API debits the account immediately and the transfer
                       cannot be reversed from this console.
                     </p>
@@ -452,8 +464,8 @@ function ConfirmDecisionDialog({
                   happens here.
                 </p>
               )}
-              <p className="text-[12px] text-slate-500">
-                Recorded as <b>{officerName}</b> (from your authenticated session — not editable) and
+              <p className="text-[12px] text-vault-500">
+                Recorded as <b className="text-vault-300">{officerName}</b> (from your authenticated session — not editable) and
                 hash-chained to the audit log.
                 {reason ? ` Reason: “${reason}”.` : approve ? "" : ""}
               </p>
@@ -461,11 +473,13 @@ function ConfirmDecisionDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel} className="border-vault-600 text-vault-300 hover:bg-vault-800">Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => onConfirm(reason)}
             disabled={busy}
-            className={approve ? "bg-emerald-700 hover:bg-emerald-600" : "bg-red-600 hover:bg-red-500"}
+            className={approve
+              ? "bg-gradient-to-br from-jade-500 to-jade-700 text-white hover:from-jade-400 hover:to-jade-600"
+              : "bg-red-700 text-white hover:bg-red-600"}
           >
             {approve ? (isTransfer ? "Execute transfer" : "Record recommendation") : "Confirm rejection"}
           </AlertDialogAction>
@@ -477,11 +491,11 @@ function ConfirmDecisionDialog({
 
 function RiskBadge({ risk }: { risk: string }) {
   const map: Record<string, string> = {
-    low: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    medium: "border-amber-300 bg-amber-50 text-amber-700",
-    high: "border-red-300 bg-red-50 text-red-700",
+    low: "border-jade-700/60 bg-jade-950/40 text-jade-300",
+    medium: "border-gold-700/60 bg-gold-950/40 text-gold-300",
+    high: "border-red-800/70 bg-red-950/50 text-red-300",
   };
-  return <Badge variant="outline" className={map[risk] ?? map.low}>{risk} risk</Badge>;
+  return <Badge variant="outline" className={`font-mono ${map[risk] ?? map.low}`}>{risk} risk</Badge>;
 }
 
 // ---------------------------------------------------------------------------
@@ -539,15 +553,15 @@ function PacksTab({ session }: { session: SessionInfo }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
-        <Loader2 className="h-4 w-4 animate-spin" /> loading packs…
+      <div className="flex items-center gap-2.5 text-vault-400 text-sm py-10 justify-center font-mono">
+        <Loader2 className="h-4 w-4 animate-spin text-jade-400" /> loading packs…
       </div>
     );
   }
 
   if (packs.length === 0) {
     return (
-      <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-xl">
+      <div className="text-center text-sm text-vault-500 py-12 border border-dashed border-vault-700/60 rounded-2xl bg-vault-900/40">
         No payslip packs yet. In the chat, choose &ldquo;I want to apply for a loan&rdquo; then click a
         payslip sample button (clean or scanned) below the input box.
       </div>
@@ -556,9 +570,9 @@ function PacksTab({ session }: { session: SessionInfo }) {
 
   return (
     <div className="space-y-4">
-      <Card className="border-slate-200 bg-slate-50">
-        <CardContent className="p-4 text-sm text-slate-600">
-          Extraction carries <b>per-field confidence</b> and the <b>source span</b> (evidence) from the
+      <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
+        <CardContent className="p-4 text-sm text-vault-300 leading-relaxed">
+          Extraction carries <b className="text-gold-200">per-field confidence</b> and the <b className="text-gold-200">source span</b> (evidence) from the
           document. Validation is deterministic (KRA PIN format, net ≤ gross, deductions reconcile,
           Employment Act one-third rule). Affordability is a computation, not a judgement. The system
           <b> recommends, never decides</b>: the credit officer records a <b>recommendation</b> for the
@@ -566,21 +580,21 @@ function PacksTab({ session }: { session: SessionInfo }) {
         </CardContent>
       </Card>
       {packs.map((p) => (
-        <Card key={p.id} className="border-slate-200">
-          <CardContent className="p-4 space-y-4">
+        <Card key={p.id} className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl shadow-[0_18px_50px_-24px_oklch(0.08_0.01_170/0.9)]">
+          <CardContent className="p-5 space-y-4">
             <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="border-slate-300">{p.docKind} payslip</Badge>
+                  <Badge variant="outline" className="border-vault-600/70 text-vault-300 font-mono">{p.docKind} payslip</Badge>
                   <Badge
                     variant="outline"
-                    className={
+                    className={`font-mono ${
                       p.status === "approved"
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        ? "border-jade-700/60 bg-jade-950/40 text-jade-300"
                         : p.status === "declined"
-                          ? "border-red-300 bg-red-50 text-red-700"
-                          : "border-amber-300 bg-amber-50 text-amber-700"
-                    }
+                          ? "border-red-800/70 bg-red-950/50 text-red-300"
+                          : "border-gold-700/60 bg-gold-950/40 text-gold-300"
+                    }`}
                   >
                     {p.status === "approved"
                       ? "officer recommended: proceed"
@@ -588,16 +602,16 @@ function PacksTab({ session }: { session: SessionInfo }) {
                         ? "officer recommended: decline"
                         : p.status.replace(/_/g, " ")}
                   </Badge>
-                  <span className="text-[11px] text-slate-400 font-mono">{p.fileName}</span>
+                  <span className="text-[11px] text-vault-600 font-mono">{p.fileName}</span>
                 </div>
-                <p className="text-sm text-slate-600 mt-2 max-w-2xl">{p.summary}</p>
+                <p className="text-sm text-vault-300 mt-2 max-w-2xl leading-relaxed">{p.summary}</p>
               </div>
               {p.status === "awaiting_review" && (
-                <div className="flex gap-2">
-                  <Button size="sm" className="bg-emerald-700 hover:bg-emerald-600 gap-1.5" onClick={() => decidePack(p.id, "approve")}>
+                <div className="flex gap-2 shrink-0">
+                  <Button size="sm" className="bg-gradient-to-br from-jade-500 to-jade-700 text-white hover:from-jade-400 hover:to-jade-600 gap-1.5" onClick={() => decidePack(p.id, "approve")}>
                     <BadgeCheck className="h-4 w-4" /> Recommend proceed
                   </Button>
-                  <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-50 gap-1.5" onClick={() => decidePack(p.id, "reject")}>
+                  <Button size="sm" variant="outline" className="border-red-800/70 text-red-300 hover:bg-red-950/50 hover:text-red-200 gap-1.5" onClick={() => decidePack(p.id, "reject")}>
                     <Ban className="h-4 w-4" /> Recommend decline
                   </Button>
                 </div>
@@ -615,24 +629,24 @@ function PacksTab({ session }: { session: SessionInfo }) {
                   ["net", p.fields.net],
                 ] as [string, { value: unknown; confidence: number; evidence?: { page: number; span: string } | null }][]
               ).map(([label, f]) => (
-                <div key={label} className="rounded-lg border border-slate-100 bg-white p-2.5">
-                  <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
-                  <div className="font-mono text-sm text-slate-800 truncate">
-                    {typeof f.value === "number" ? `KES ${f.value.toLocaleString()}` : String(f.value ?? "—")}
+                <div key={label} className="rounded-xl border border-vault-700/60 bg-vault-850/60 p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500">{label}</div>
+                  <div className="font-mono text-sm text-vault-100 truncate mt-0.5">
+                    {typeof f.value === "number" ? <span className="text-gold-200">KES {f.value.toLocaleString()}</span> : String(f.value ?? "—")}
                   </div>
-                  <div className="flex items-center gap-1 mt-1">
-                    <div className="h-1 flex-1 rounded bg-slate-100 overflow-hidden">
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <div className="h-1 flex-1 rounded bg-vault-800 overflow-hidden">
                       <div
-                        className={`h-full ${f.confidence >= 0.7 ? "bg-emerald-500" : "bg-amber-500"}`}
+                        className={`h-full rounded-full ${f.confidence >= 0.7 ? "bg-jade-500" : "bg-gold-500"}`}
                         style={{ width: `${Math.round(f.confidence * 100)}%` }}
                       />
                     </div>
-                    <span className={`text-[10px] font-mono ${f.confidence >= 0.7 ? "text-emerald-600" : "text-amber-600"}`}>
+                    <span className={`text-[10px] font-mono tabular-nums ${f.confidence >= 0.7 ? "text-jade-400" : "text-gold-400"}`}>
                       {f.confidence.toFixed(2)}
                     </span>
                   </div>
                   {f.evidence && (
-                    <div className="text-[10px] text-slate-400 truncate mt-1" title={f.evidence.span}>
+                    <div className="text-[10px] text-vault-500 truncate mt-1.5 font-mono" title={f.evidence.span}>
                       ↳ p.{f.evidence.page}: &ldquo;{f.evidence.span.slice(0, 46)}&rdquo;
                     </div>
                   )}
@@ -643,35 +657,35 @@ function PacksTab({ session }: { session: SessionInfo }) {
             {/* validation rules */}
             <div className="space-y-1">
               {p.validation.rules.map((r) => (
-                <div key={r.rule} className="flex items-center gap-2 text-[11px]">
+                <div key={r.rule} className="flex items-center gap-2.5 text-[11px]">
                   {r.passed ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-jade-400 shrink-0" />
                   ) : (
-                    <Ban className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                    <Ban className="h-3.5 w-3.5 text-red-400 shrink-0" />
                   )}
-                  <span className="font-mono text-slate-600 w-36 shrink-0">{r.rule}</span>
-                  <span className="text-slate-500">{r.detail}</span>
+                  <span className="font-mono text-vault-400 w-40 shrink-0">{r.rule}</span>
+                  <span className="text-vault-500">{r.detail}</span>
                 </div>
               ))}
             </div>
 
-            {/* affordability */}
-            <div className="rounded-lg bg-emerald-950 text-emerald-100 p-3 grid sm:grid-cols-4 gap-3 text-[11px]">
+            {/* affordability — the vault strip */}
+            <div className="rounded-xl border border-gold-500/20 bg-gradient-to-br from-vault-800 to-vault-900 p-4 grid sm:grid-cols-4 gap-3 text-[11px]">
               <div>
-                <div className="text-emerald-400/70 uppercase tracking-wide text-[9px]">disposable / month</div>
-                <div className="font-mono text-sm">KES {p.affordability.disposableMonthlyKes.toLocaleString()}</div>
+                <div className="text-vault-500 uppercase tracking-wider text-[9px] font-mono">disposable / month</div>
+                <div className="font-mono text-sm text-vault-100 mt-0.5">KES {p.affordability.disposableMonthlyKes.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-emerald-400/70 uppercase tracking-wide text-[9px]">max prudent instalment</div>
-                <div className="font-mono text-sm">KES {p.affordability.maxInstalmentKes.toLocaleString()}</div>
+                <div className="text-vault-500 uppercase tracking-wider text-[9px] font-mono">max prudent instalment</div>
+                <div className="font-mono text-sm text-vault-100 mt-0.5">KES {p.affordability.maxInstalmentKes.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-emerald-400/70 uppercase tracking-wide text-[9px]">proposed instalment</div>
-                <div className="font-mono text-sm text-amber-300">KES {p.affordability.proposedInstalmentKes.toLocaleString()}</div>
+                <div className="text-vault-500 uppercase tracking-wider text-[9px] font-mono">proposed instalment</div>
+                <div className="font-mono text-sm text-gold-300 mt-0.5">KES {p.affordability.proposedInstalmentKes.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-emerald-400/70 uppercase tracking-wide text-[9px]">recommendation</div>
-                <div className="font-mono text-sm">{p.affordability.recommendation.replace(/_/g, " ")}</div>
+                <div className="text-vault-500 uppercase tracking-wider text-[9px] font-mono">recommendation</div>
+                <div className="font-mono text-sm text-jade-300 mt-0.5">{p.affordability.recommendation.replace(/_/g, " ")}</div>
               </div>
             </div>
           </CardContent>
@@ -722,26 +736,26 @@ function AuditTab({ sessionId, onVerified }: { sessionId: string; onVerified: ()
 
   return (
     <div className="space-y-4">
-      <Card className={verification?.ok ? "border-emerald-300 bg-emerald-50/60" : "border-red-300 bg-red-50/60"}>
+      <Card className={`rounded-2xl backdrop-blur-xl ${verification?.ok ? "border-jade-700/60 bg-jade-950/25" : "border-red-800/60 bg-red-950/25"}`}>
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             {verification?.ok ? (
-              <ShieldCheck className="h-8 w-8 text-emerald-600" />
+              <ShieldCheck className="h-9 w-9 text-jade-400" />
             ) : (
-              <Activity className="h-8 w-8 text-red-600" />
+              <Activity className="h-9 w-9 text-red-400" />
             )}
             <div>
-              <div className="font-medium text-slate-900">
+              <div className="font-display font-medium text-vault-50">
                 {verification?.ok
                   ? `Hash chain intact — ${verification.verifiedEvents ?? verification.totalEventsInDb ?? 0} events verified`
                   : `CHAIN BROKEN at event #${verification?.brokenAt}`}
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-vault-400">
                 Every event is SHA-256 chained to its predecessor (prev_hash + payload → hash).
                 Recomputed on every read — tampering breaks the chain.
               </div>
               {/* verified-range honesty (P2-9): say exactly what was checked */}
-              <div className="text-[11px] mt-0.5 text-slate-400">
+              <div className="text-[11px] mt-1 text-vault-500 font-mono">
                 {verification?.coverage === "full-history"
                   ? `verified coverage: full history (${verification.verifiedEvents} of ${verification.totalEventsInDb} events)`
                   : verification?.coverage
@@ -750,12 +764,12 @@ function AuditTab({ sessionId, onVerified }: { sessionId: string; onVerified: ()
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              <input type="checkbox" checked={filterSession} onChange={(e) => setFilterSession(e.target.checked)} className="accent-emerald-700" />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-vault-300 cursor-pointer select-none">
+              <input type="checkbox" checked={filterSession} onChange={(e) => setFilterSession(e.target.checked)} className="accent-gold-500 h-3.5 w-3.5" />
               this session only
             </label>
-            <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={load} className="gap-1.5 border-vault-600 text-vault-300 hover:bg-vault-800 hover:text-gold-200">
               <RefreshCw className="h-3.5 w-3.5" /> Verify chain
             </Button>
           </div>
@@ -763,12 +777,12 @@ function AuditTab({ sessionId, onVerified }: { sessionId: string; onVerified: ()
       </Card>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
-          <Loader2 className="h-4 w-4 animate-spin" /> reading chain…
+        <div className="flex items-center gap-2.5 text-vault-400 text-sm py-10 justify-center font-mono">
+          <Loader2 className="h-4 w-4 animate-spin text-jade-400" /> reading chain…
         </div>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-          <div className="grid grid-cols-[50px_110px_150px_1fr_130px] text-[10px] uppercase tracking-wide text-slate-400 border-b border-slate-100 px-3 py-2 font-medium">
+        <div className="rounded-2xl border border-vault-700/60 bg-vault-900/70 backdrop-blur-xl overflow-hidden">
+          <div className="grid grid-cols-[50px_120px_160px_1fr_130px] text-[10px] font-mono uppercase tracking-wider text-vault-500 border-b border-vault-700/50 bg-vault-850/60 px-4 py-2.5">
             <span>#</span>
             <span>event</span>
             <span>actor</span>
@@ -776,20 +790,20 @@ function AuditTab({ sessionId, onVerified }: { sessionId: string; onVerified: ()
             <span className="text-right">hash</span>
           </div>
           <div className="max-h-[60vh] overflow-y-auto">
-            {events.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No events yet.</div>}
+            {events.length === 0 && <div className="text-center text-sm text-vault-500 py-10">No events yet.</div>}
             {events.map((e) => (
               <button
                 key={e.id}
                 onClick={() => setExpanded(expanded === e.id ? null : e.id)}
-                className="w-full text-left grid grid-cols-[50px_110px_150px_1fr_130px] items-start gap-2 px-3 py-2 border-b border-slate-50 hover:bg-slate-50 text-[11px]"
+                className="w-full text-left grid grid-cols-[50px_120px_160px_1fr_130px] items-start gap-2 px-4 py-2.5 border-b border-vault-800/60 hover:bg-vault-850/50 text-[11px] transition-colors"
               >
-                <span className="text-slate-400 font-mono">{e.id}</span>
-                <span className="font-mono text-slate-700">{e.eventType}</span>
-                <span className="text-slate-500 truncate font-mono">{e.actor}</span>
-                <span className={`font-mono ${expanded === e.id ? "whitespace-pre-wrap break-all" : "truncate"} text-slate-500`}>
+                <span className="text-vault-600 font-mono tabular-nums">{e.id}</span>
+                <span className="font-mono text-jade-300">{e.eventType}</span>
+                <span className="text-vault-400 truncate font-mono">{e.actor}</span>
+                <span className={`font-mono ${expanded === e.id ? "whitespace-pre-wrap break-all" : "truncate"} text-vault-400`}>
                   {expanded === e.id ? JSON.stringify(e.payload, null, 1) : JSON.stringify(e.payload).slice(0, 120)}
                 </span>
-                <span className="text-right font-mono text-slate-400 flex items-center justify-end gap-1">
+                <span className="text-right font-mono text-gold-400/80 flex items-center justify-end gap-1.5">
                   <Link2 className="h-3 w-3" />
                   {e.hash.slice(0, 10)}…
                 </span>
@@ -821,15 +835,15 @@ function EvalsTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
-        <Loader2 className="h-4 w-4 animate-spin" /> loading last run…
+      <div className="flex items-center gap-2.5 text-vault-400 text-sm py-10 justify-center font-mono">
+        <Loader2 className="h-4 w-4 animate-spin text-jade-400" /> loading last run…
       </div>
     );
   }
   if (!run) {
     return (
-      <div className="text-center text-sm text-slate-400 py-10 border border-dashed border-slate-200 rounded-xl">
-        No evaluation run found. Run <code className="font-mono text-emerald-700">bun run eval</code> to
+      <div className="text-center text-sm text-vault-500 py-12 border border-dashed border-vault-700/60 rounded-2xl bg-vault-900/40">
+        No evaluation run found. Run <code className="font-mono text-gold-300">bun run eval</code> to
         execute the golden set through the production orchestrator.
       </div>
     );
@@ -840,20 +854,20 @@ function EvalsTab() {
 
   return (
     <div className="space-y-4">
-      <Card className={run.passed ? "border-emerald-300 bg-emerald-50/50" : "border-red-300 bg-red-50/50"}>
+      <Card className={`rounded-2xl backdrop-blur-xl ${run.passed ? "border-jade-700/60 bg-jade-950/25" : "border-red-800/60 bg-red-950/25"}`}>
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {run.passed ? <ShieldCheck className="h-8 w-8 text-emerald-600" /> : <Ban className="h-8 w-8 text-red-600" />}
+          <div className="flex items-center gap-3.5">
+            {run.passed ? <ShieldCheck className="h-9 w-9 text-jade-400" /> : <Ban className="h-9 w-9 text-red-400" />}
             <div>
-              <div className="font-medium text-slate-900">
+              <div className="font-display font-medium text-vault-50">
                 {run.passed ? "CI gate: PASS" : "CI gate: FAIL"} — {t.passed}/{t.total} cases
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-vault-400 font-mono">
                 run {run.id.slice(0, 12)}… · {new Date(run.startedAt).toLocaleString()} · model path: {run.model}
               </div>
             </div>
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-vault-500 font-mono">
             gate thresholds: pass ≥ 90% · route ≥ 90% · refusal recall = 100% · fee numeric = 100%
           </div>
         </CardContent>
@@ -871,26 +885,26 @@ function EvalsTab() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <Card className="border-slate-200">
+        <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
           <CardContent className="p-4">
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500 mb-3">
               by language — EN / SW / code-mixed
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {Object.entries(t.byLanguage).map(([lang, v]) => (
                 <BarRow key={lang} label={lang} total={v.total} passed={v.passed} />
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+            <p className="text-[10px] text-vault-500 mt-3 leading-relaxed">
               African-language and code-mixed performance can lag English (IrokoBench) — failures here
               are first-class signals, not noise.
             </p>
           </CardContent>
         </Card>
-        <Card className="border-slate-200">
+        <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
           <CardContent className="p-4">
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">by risk class</div>
-            <div className="space-y-2">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500 mb-3">by risk class</div>
+            <div className="space-y-2.5">
               {Object.entries(t.byRisk).map(([risk, v]) => (
                 <BarRow key={risk} label={risk} total={v.total} passed={v.passed} />
               ))}
@@ -900,22 +914,22 @@ function EvalsTab() {
       </div>
 
       {failed.length > 0 && (
-        <Card className="border-red-200">
+        <Card className="rounded-2xl border-red-800/60 bg-red-950/25 backdrop-blur-xl">
           <CardContent className="p-4 space-y-2">
-            <div className="text-xs font-medium text-red-700 uppercase tracking-wide">failed cases</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-red-300">failed cases</div>
             {failed.map((c) => (
-              <div key={c.id} className="text-[11px] text-slate-600">
-                <b className="font-mono">{c.id}</b> ({c.lang}/{c.risk}) — {c.failures.join("; ")}
-                <div className="text-slate-400">&ldquo;{c.input}&rdquo;</div>
+              <div key={c.id} className="text-[11px] text-vault-300">
+                <b className="font-mono text-red-300">{c.id}</b> ({c.lang}/{c.risk}) — {c.failures.join("; ")}
+                <div className="text-vault-500">&ldquo;{c.input}&rdquo;</div>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      <div className="text-[11px] text-slate-400">
-        Full report: <code className="font-mono text-emerald-700">docs/eval/eval-report.md</code> · harness:{" "}
-        <code className="font-mono text-emerald-700">bun run eval</code> · CI gate runs on every PR.
+      <div className="text-[11px] text-vault-500 font-mono">
+        Full report: <code className="text-gold-300">docs/eval/eval-report.md</code> · harness:{" "}
+        <code className="text-gold-300">bun run eval</code> · CI gate runs on every PR.
       </div>
     </div>
   );
@@ -923,10 +937,10 @@ function EvalsTab() {
 
 function MetricCard({ label, value, good }: { label: string; value: string; good?: boolean }) {
   return (
-    <Card className={`border ${good === false ? "border-red-200 bg-red-50" : "border-slate-200"}`}>
+    <Card className={`rounded-xl border ${good === false ? "border-red-800/60 bg-red-950/30" : "border-vault-700/60 bg-vault-900/70"} backdrop-blur`}>
       <CardContent className="p-2.5">
-        <div className="text-[9px] uppercase tracking-wide text-slate-400">{label}</div>
-        <div className={`font-mono text-sm ${good === false ? "text-red-700" : "text-slate-900"}`}>{value}</div>
+        <div className="text-[9px] font-mono uppercase tracking-wider text-vault-500">{label}</div>
+        <div className={`font-mono text-sm mt-0.5 tabular-nums ${good === false ? "text-red-300" : "text-jade-300"}`}>{value}</div>
       </CardContent>
     </Card>
   );
@@ -935,12 +949,12 @@ function MetricCard({ label, value, good }: { label: string; value: string; good
 function BarRow({ label, total, passed }: { label: string; total: number; passed: number }) {
   const rate = total ? passed / total : 1;
   return (
-    <div className="flex items-center gap-2 text-[11px]">
-      <span className="w-14 text-slate-500 capitalize">{label}</span>
-      <div className="flex-1 h-2 rounded bg-slate-100 overflow-hidden">
-        <div className={`h-full ${rate >= 0.9 ? "bg-emerald-500" : rate >= 0.7 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${rate * 100}%` }} />
+    <div className="flex items-center gap-2.5 text-[11px]">
+      <span className="w-16 text-vault-400 capitalize">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-vault-800 overflow-hidden">
+        <div className={`h-full rounded-full ${rate >= 0.9 ? "bg-jade-500" : rate >= 0.7 ? "bg-gold-500" : "bg-red-500"}`} style={{ width: `${rate * 100}%` }} />
       </div>
-      <span className="font-mono text-slate-500 w-16 text-right">{passed}/{total}</span>
+      <span className="font-mono text-vault-400 w-16 text-right tabular-nums">{passed}/{total}</span>
     </div>
   );
 }
@@ -1008,22 +1022,22 @@ function MonitorTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-slate-200">
+      <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Gauge className="h-5 w-5 text-emerald-700" />
+          <div className="flex items-center gap-2.5 text-sm text-vault-300">
+            <Gauge className="h-5 w-5 text-jade-400" />
             Live operational metrics — sourced from the audit chain, exposed in Prometheus format at{" "}
-            <code className="font-mono text-[11px] text-emerald-700">/api/metrics</code>.
+            <code className="font-mono text-[11px] text-gold-300">/api/metrics</code>.
           </div>
-          <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={load} className="gap-1.5 border-vault-600 text-vault-300 hover:bg-vault-800 hover:text-gold-200">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
         </CardContent>
       </Card>
 
       {loading && !metrics ? (
-        <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
-          <Loader2 className="h-4 w-4 animate-spin" /> collecting metrics…
+        <div className="flex items-center gap-2.5 text-vault-400 text-sm py-10 justify-center font-mono">
+          <Loader2 className="h-4 w-4 animate-spin text-jade-400" /> collecting metrics…
         </div>
       ) : (
         <>
@@ -1043,27 +1057,27 @@ function MonitorTab() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <Card className="border-slate-200">
-              <CardContent className="p-4 space-y-2">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">dependencies</div>
+            <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
+              <CardContent className="p-4 space-y-2.5">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500">dependencies</div>
                 {health && Object.entries(health.dependencies).map(([k, v]) => (
-                  <div key={k} className="flex justify-between text-[11px] gap-2">
-                    <span className="text-slate-500">{k}</span>
-                    <span className={`font-mono text-right ${depOk(v) ? "text-emerald-600" : "text-amber-600"}`}>{depLabel(v)}</span>
+                  <div key={k} className="flex justify-between text-[11px] gap-2 font-mono">
+                    <span className="text-vault-400">{k}</span>
+                    <span className={`text-right ${depOk(v) ? "text-jade-400" : "text-gold-400"}`}>{depLabel(v)}</span>
                   </div>
                 ))}
               </CardContent>
             </Card>
-            <Card className="border-slate-200">
-              <CardContent className="p-4 space-y-2">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">SLO alerts (compose stack)</div>
-                <ul className="text-[11px] text-slate-500 space-y-1.5">
-                  <li>• P95 latency &gt; 3s for 5m → page on-call (error budget burn)</li>
-                  <li>• refusal recall &lt; 1.0 in eval gate → block merge</li>
-                  <li>• guardrail trip rate &gt; 5% of traffic → review injection patterns</li>
-                  <li>• escalation rate drift &gt; ±20% week-over-week → tune answerability gate</li>
+            <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl">
+              <CardContent className="p-4 space-y-2.5">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500">SLO alerts (compose stack)</div>
+                <ul className="text-[11px] text-vault-400 space-y-2">
+                  <li className="flex gap-2"><span className="text-gold-500/70 mt-0.5">•</span>P95 latency &gt; 3s for 5m → page on-call (error budget burn)</li>
+                  <li className="flex gap-2"><span className="text-gold-500/70 mt-0.5">•</span>refusal recall &lt; 1.0 in eval gate → block merge</li>
+                  <li className="flex gap-2"><span className="text-gold-500/70 mt-0.5">•</span>guardrail trip rate &gt; 5% of traffic → review injection patterns</li>
+                  <li className="flex gap-2"><span className="text-gold-500/70 mt-0.5">•</span>escalation rate drift &gt; ±20% week-over-week → tune answerability gate</li>
                 </ul>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-vault-500">
                   Grafana dashboards ship in deploy/ (Prometheus scrapes /api/metrics).
                 </p>
               </CardContent>

@@ -246,3 +246,46 @@ Executed the deep-review upgrade prompt's highest-value slices:
 
 Evidence: `bun run verify` PASS (134/134 tests, eval 100% 55/55, type-validated build); feature smoke 33/33 on the standalone production server, cold start.
 Not done (deliberate): real document upload pipeline (P5), RAG claim-span validation + expanded adversarial suite (P6), UI deepening (P8), persisted-money Float→cents migration, categoriser calibration/drift, compose restore drill.
+
+## 2026-11-02 — "The Vault" redesign: UI/UX overhaul (backlog P8 delivered)
+
+User verdict on the old UI: "below 4/10… make it unique and 10/10." Ground-up visual
+redesign on the same logic/API surface — zero behavioural changes, every selector preserved.
+
+- **Design system** (`src/app/globals.css`): new "The Vault" palette (hazina = Swahili for
+  treasure) — deep green-black `vault` scale, `gold` treasure accents, `jade` live-data
+  accents; shadcn tokens re-themed to the dark vault so every stock component matches;
+  signature surfaces: banknote **guilloché** engraving (SVG data-URI), film-grain noise,
+  aurora blob drift keyframes, engraved gold hairline (`.hairline-gold`), shimmering gold
+  display text, custom thin scrollbars, `prefers-reduced-motion` respected.
+- **Typography** (`src/app/layout.tsx`): Fraunces (heritage serif display) + Inter (UI) +
+  JetBrains Mono (amounts/hashes/evidence) replacing default Geist.
+- **Login** (`page.tsx`): cinematic vault door — aurora field + guilloché + vignette,
+  Fraunces hero "Banking intelligence, *vaulted.*" with shimmer italic, verifiable trust
+  strip (134/134 checks · 100% refusal-recall gate · SHA-256 chain), glass sign-in card
+  with gold hairline, initial-avatar rows with hover-lift, framer-motion staggered entrance.
+- **App shell**: glass header with gold hairline, jade active-pill segmented nav,
+  gold-tinted officer banner, mono footer.
+- **Chat** (`chat-view.tsx`): glass chat card, pulsing "guardrails live" dot, jade-gradient
+  user bubbles, gold-labelled assistant bubbles, framer-motion message entrances, animated
+  typing dots, gold gradient send button, journey strip (gold active / jade done), premium
+  metal-style account rail, gold "in plain language" explainability block, dark citation
+  evidence cards.
+- **Ops console** (`ops-console.tsx`): mission-control restyle — segmented tab control with
+  gold active state, gold serif amounts on approval cards, jade execute / red reject
+  actions, dark audit ledger with jade event types + gold hashes, jade metric cards.
+- **Tour banner**: dark glass with gold hairline, jade completion state.
+- **Brand mark** (`logo.tsx`, `icon.svg`, `public/logo.svg`): re-cut gradients (jade shield,
+  refined gold gem), engraved inner line, animated gem sheen sweep; showcase page
+  (`docs/index.html`) palette + inline mark + favicon aligned; 9 showcase screenshots
+  refreshed via updated `scripts/refresh-screenshots.py`.
+- **Fixed a real P0 responsive bug the old smoke check masked**: login grid children lacked
+  `min-w-0`, so the implicit mobile track sized to min-content (~548px) and content was
+  silently clipped by `overflow-hidden` (scrollWidth check couldn't see it). Found via VLM
+  review + playwright rect probe; fixed on both grid children; re-probed: intro paragraph
+  right edge 349px < 390px viewport. VLM-flagged contrast fixes applied (vault-400/300
+  detail text bumped to ≥5:1).
+- **Verification**: lint ✓ · typecheck ✓ · `bun run verify` PASS (134/134 tests, eval gate
+  100% 55/55, type-validated build) · browser smoke 18/18 (login→fee→OTP→approve→audit,
+  RBAC, mobile 390px, zero console errors) · VLM design QA: desktop login 9/10, mobile 8/10
+  after fixes.

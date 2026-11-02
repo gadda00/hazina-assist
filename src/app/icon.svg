@@ -1,35 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Hazina Assist">
-  <!-- Hazina Assist mark: a shield (bank-grade safety) holding a faceted gem
-       ("hazina" — Swahili for treasure). Emerald + gold demo palette. -->
+  <!-- Hazina Assist mark — "The Vault" edition: a shield (bank-grade safety)
+       holding a faceted gem ("hazina" — Swahili for treasure). Jade + gold on
+       the deep vault plate. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#064e3b"/>
-      <stop offset="1" stop-color="#022c22"/>
+      <stop offset="0" stop-color="#123528"/>
+      <stop offset="1" stop-color="#0a1c15"/>
     </linearGradient>
-    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#34d399"/>
-      <stop offset="0.5" stop-color="#10b981"/>
-      <stop offset="1" stop-color="#065f46"/>
+    <linearGradient id="shield" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#43bd8c"/>
+      <stop offset="0.45" stop-color="#1d9a6b"/>
+      <stop offset="1" stop-color="#0b4d38"/>
     </linearGradient>
-    <linearGradient id="gem" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fde68a"/>
-      <stop offset="0.5" stop-color="#fbbf24"/>
-      <stop offset="1" stop-color="#d97706"/>
+    <linearGradient id="gem" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#f6e3ac"/>
+      <stop offset="0.5" stop-color="#e8c468"/>
+      <stop offset="1" stop-color="#b07f2e"/>
     </linearGradient>
   </defs>
 
   <!-- rounded-square plate -->
-  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#bg)" stroke="#065f46" stroke-width="2"/>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#bg)" stroke="#e8c468" stroke-opacity="0.35" stroke-width="1.5"/>
 
   <!-- shield -->
   <path d="M32 11 L46 16.5 V31 C46 40.5 39.7 46.9 32 51 C24.3 46.9 18 40.5 18 31 V16.5 Z"
-        fill="url(#shield)" stroke="#fbbf24" stroke-width="2" stroke-linejoin="round"/>
+        fill="url(#shield)" stroke="#e8c468" stroke-width="1.8" stroke-linejoin="round"/>
+
+  <!-- inner engraved line -->
+  <path d="M32 14 L43.5 18.4 V30.7 C43.5 38.5 38.4 44.1 32 47.5 C25.6 44.1 20.5 38.5 20.5 30.7 V18.4 Z"
+        fill="none" stroke="#f6e3ac" stroke-opacity="0.35" stroke-width="1" stroke-linejoin="round"/>
 
   <!-- gem: crown + pavilion (kite cut) -->
-  <path d="M25 27 L28.5 21 H35.5 L39 27 L32 38 Z" fill="url(#gem)" stroke="#92400e" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M25 27 L28.5 21 H35.5 L39 27 L32 38 Z" fill="url(#gem)" stroke="#7a5a1e" stroke-width="0.9" stroke-linejoin="round"/>
 
   <!-- facet lines -->
-  <path d="M25 27 H39 M28.5 21 L32 38 L35.5 21" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M25 27 H39 M28.5 21 L32 38 L35.5 21" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.1" stroke-linejoin="round"/>
 
   <!-- table sparkle -->
   <path d="M30 23.5 L32 21.5 L34 23.5" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1.4" stroke-linecap="round"/>

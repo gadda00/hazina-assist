@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -176,22 +177,27 @@ export function ChatView({ session }: { session: SessionInfo }) {
   const journey = journeyFromResult(lastAssistant?.result);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 lg:py-6">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 lg:py-6">
       <TourBanner tick={tourTick} />
       <div className="grid lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-4">
         {/* ------------------------- Chat column ------------------------- */}
-        <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm min-h-[70vh] max-h-[86vh] min-w-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <HazinaMark className="h-5 w-5" />
-              <span className="font-medium text-sm text-slate-800">Hazina Assistant</span>
-              <Badge variant="outline" className="text-[10px] border-emerald-200 text-emerald-700 bg-emerald-50">
-                guardrails live
-              </Badge>
+        <div className="flex flex-col rounded-2xl border border-vault-700/60 bg-vault-900/70 backdrop-blur-xl shadow-[0_24px_70px_-28px_oklch(0.08_0.01_170/0.9)] min-h-[70vh] max-h-[86vh] min-w-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-vault-700/50">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-jade-700/50 bg-jade-900/40">
+                <HazinaMark className="h-5 w-5" />
+              </span>
+              <div>
+                <span className="font-display font-medium text-[15px] text-vault-50">Hazina Assistant</span>
+                <span className="ml-2 inline-flex items-center gap-1.5 align-middle">
+                  <span className="h-1.5 w-1.5 rounded-full bg-jade-400 animate-pulse-dot" aria-hidden />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-jade-300">guardrails live</span>
+                </span>
+              </div>
             </div>
             <button
               onClick={() => setShowTrace((s) => !s)}
-              className="lg:hidden text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1"
+              className="lg:hidden text-xs text-vault-400 hover:text-gold-300 flex items-center gap-1 transition-colors"
             >
               <Activity className="h-3.5 w-3.5" /> {showTrace ? "Hide" : "Show"} why
             </button>
@@ -201,17 +207,22 @@ export function ChatView({ session }: { session: SessionInfo }) {
           {journey && <ControlJourney stage={journey.stage} label={journey.label} />}
 
           <div
-            className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4"
+            className="flex-1 overflow-y-auto px-3 sm:px-5 py-5 space-y-5"
             aria-live="polite"
             aria-label="Conversation with Hazina Assistant"
             role="log"
           >
             {messages.length === 0 && (
-              <div className="text-center py-10 px-4">
-                <Bot className="h-10 w-10 text-emerald-200 mx-auto mb-3" />
-                <p className="text-sm text-slate-600 max-w-md mx-auto">
-                  Habari {session.customer.name.split(" ")[0]}! Ask me about fees and tariffs, show your
-                  balance, or start a transfer — I&rsquo;ll explain every decision I make.
+              <div className="text-center py-12 px-4">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-gold-500/30 bg-gradient-to-br from-vault-800 to-vault-900 shadow-[0_12px_30px_-12px_oklch(0.08_0.01_170/0.9)]">
+                  <HazinaMark className="h-8 w-8" />
+                </div>
+                <p className="font-display text-lg text-vault-100">
+                  Habari, {session.customer.name.split(" ")[0]}.
+                </p>
+                <p className="text-sm text-vault-300/80 max-w-md mx-auto mt-2 leading-relaxed">
+                  Ask me about fees and tariffs, show your balance, or start a transfer — I&rsquo;ll
+                  explain every decision I make.
                 </p>
               </div>
             )}
@@ -219,26 +230,33 @@ export function ChatView({ session }: { session: SessionInfo }) {
               <MessageBubble key={m.id} m={m} onOtpSubmit={(code) => send(code)} otpInput={otpInput} setOtpInput={setOtpInput} />
             ))}
             {busy && (
-              <div className="flex items-center gap-2 text-sm text-slate-400 px-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> orchestrating…
+              <div className="flex items-center gap-2.5 text-sm text-vault-400 px-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-jade-700/50 bg-jade-900/30">
+                  <span className="flex items-end gap-[3px] pb-2">
+                    <span className="typing-dot h-1 w-1 rounded-full bg-jade-300" />
+                    <span className="typing-dot h-1 w-1 rounded-full bg-jade-300" />
+                    <span className="typing-dot h-1 w-1 rounded-full bg-jade-300" />
+                  </span>
+                </span>
+                orchestrating…
               </div>
             )}
             <div ref={endRef} />
           </div>
 
           {/* quick prompts */}
-          <div className="px-3 sm:px-4 pt-2 pb-1 flex gap-1.5 overflow-x-auto">
+          <div className="px-3 sm:px-5 pt-2 pb-1.5 flex gap-2 overflow-x-auto">
             {QUICK_PROMPTS.map((q) => (
               <button
                 key={q.label}
                 onClick={() => send(q.text)}
                 disabled={busy}
-                className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full border transition ${
+                className={`shrink-0 text-[11px] px-3 py-1.5 rounded-full border transition-all duration-200 disabled:opacity-50 ${
                   q.tag === "attack"
-                    ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                    ? "border-red-800/60 bg-red-950/40 text-red-300 hover:bg-red-900/40 hover:border-red-600/70"
                     : q.tag === "gate"
-                      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:border-slate-300"
+                      ? "border-gold-700/50 bg-gold-950/30 text-gold-300 hover:bg-gold-900/30 hover:border-gold-500/60"
+                      : "border-vault-700/70 bg-vault-850/60 text-vault-300 hover:bg-vault-800 hover:border-jade-600/60 hover:text-jade-200"
                 }`}
               >
                 {q.label}
@@ -248,7 +266,7 @@ export function ChatView({ session }: { session: SessionInfo }) {
 
           {/* input */}
           <form
-            className="p-3 sm:p-4 border-t border-slate-100 flex gap-2"
+            className="p-3 sm:p-4 border-t border-vault-700/50 flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               send(input);
@@ -259,29 +277,29 @@ export function ChatView({ session }: { session: SessionInfo }) {
               onChange={(e) => setInput(e.target.value)}
               placeholder={otpDev ? "Enter the 6-digit code from your SMS…" : "Type a message — English, Kiswahili or Sheng…"}
               aria-label={otpDev ? "OTP code entry" : "Message to Hazina Assistant"}
-              className="flex-1"
+              className="flex-1 h-11 bg-vault-850/80 border-vault-700/70 text-vault-100 placeholder:text-vault-500 focus-visible:ring-gold-400/50 focus-visible:border-gold-500/50"
               maxLength={500}
             />
             <Button
               type="submit"
               disabled={busy || !input.trim()}
               aria-label="Send message"
-              className="bg-emerald-800 hover:bg-emerald-700"
+              className="h-11 px-4 bg-gradient-to-br from-gold-400 to-gold-600 text-vault-975 hover:from-gold-300 hover:to-gold-500 shadow-[0_6px_20px_-6px_oklch(0.68_0.13_80/0.6)] disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
             </Button>
           </form>
-          <div className="px-4 pb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+          <div className="px-4 sm:px-5 pb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[11px] text-vault-400">
             {/* fixed synthetic fixtures — NOT a real upload (deep-review P2-15) */}
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <FlaskConical className="h-3.5 w-3.5" aria-hidden /> Try a synthetic payslip sample (fixed demo fixture — no file upload):
             </span>
-            <button onClick={() => processPayslip("clean")} disabled={busy} className="underline hover:text-emerald-700">clean digital</button>
-            <button onClick={() => processPayslip("scanned")} disabled={busy} className="underline hover:text-emerald-700">scanned (OCR noise)</button>
-            <button onClick={() => processPayslip("flagged")} disabled={busy} className="underline hover:text-red-700">tampered (validation fails)</button>
+            <button onClick={() => processPayslip("clean")} disabled={busy} className="underline decoration-vault-600 underline-offset-2 hover:text-jade-300 hover:decoration-jade-600 transition-colors">clean digital</button>
+            <button onClick={() => processPayslip("scanned")} disabled={busy} className="underline decoration-vault-600 underline-offset-2 hover:text-jade-300 hover:decoration-jade-600 transition-colors">scanned (OCR noise)</button>
+            <button onClick={() => processPayslip("flagged")} disabled={busy} className="underline decoration-vault-600 underline-offset-2 hover:text-red-400 hover:decoration-red-700 transition-colors">tampered (validation fails)</button>
             {otpDev && (
-              <span className="ml-auto flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                <KeyRound className="h-3 w-3" aria-hidden /> demo SMS: <b>{otpDev}</b>
+              <span className="ml-auto flex items-center gap-1.5 text-gold-200 bg-gold-500/12 border border-gold-500/35 rounded-full px-2.5 py-0.5 font-mono">
+                <KeyRound className="h-3 w-3" aria-hidden /> demo SMS: <b className="tracking-widest">{otpDev}</b>
               </span>
             )}
           </div>
@@ -314,14 +332,19 @@ function MessageBubble({
 }) {
   if (m.role === "user") {
     return (
-      <div className="flex justify-end gap-2">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-emerald-800 text-white px-4 py-2.5 text-sm whitespace-pre-wrap">
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.99 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="flex justify-end gap-2.5"
+      >
+        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-gradient-to-br from-jade-600 to-jade-800 text-white px-4 py-2.5 text-sm whitespace-pre-wrap shadow-[0_8px_24px_-10px_oklch(0.55_0.11_163/0.55)]">
           {m.content}
         </div>
-        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
-          <User className="h-4 w-4 text-slate-600" />
+        <div className="h-8 w-8 rounded-full bg-vault-750 border border-vault-600/60 flex items-center justify-center shrink-0">
+          <User className="h-4 w-4 text-vault-300" />
         </div>
-      </div>
+      </motion.div>
     );
   }
   const t = m.trace;
@@ -335,35 +358,42 @@ function MessageBubble({
   const pending = result?.pendingIntent;
 
   return (
-    <div className="flex gap-2">
-      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${blocked ? "bg-red-100" : "bg-emerald-100"}`}>
-        {blocked ? <ShieldAlert className="h-4 w-4 text-red-600" /> : <Bot className="h-4 w-4 text-emerald-700" />}
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: "easeOut" }}
+      className="flex gap-2.5"
+    >
+      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 border ${blocked ? "bg-red-950/60 border-red-800/60" : "bg-jade-900/50 border-jade-700/50"}`}>
+        {blocked ? <ShieldAlert className="h-4 w-4 text-red-400" /> : <Bot className="h-4 w-4 text-jade-300" />}
       </div>
       <div className="max-w-[92%] space-y-2">
-        <div className={`rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm whitespace-pre-wrap ${
-          blocked ? "bg-red-50 border border-red-200 text-red-900" : "bg-slate-100 text-slate-800"
+        <div className={`rounded-2xl rounded-bl-md px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed border ${
+          blocked
+            ? "bg-red-950/40 border-red-800/60 text-red-100"
+            : "bg-vault-800/80 border-vault-700/50 text-vault-100"
         }`}>
           {m.content}
         </div>
 
         {/* OTP entry */}
         {otp?.issued && (
-          <Card className="border-amber-200 bg-amber-50/60">
-            <CardContent className="p-3 flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-amber-700 shrink-0" />
+          <Card className="border-gold-500/40 bg-gold-950/20 backdrop-blur">
+            <CardContent className="p-3 flex items-center gap-2.5">
+              <KeyRound className="h-4 w-4 text-gold-400 shrink-0" />
               <Input
                 value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="6-digit code"
                 aria-label="One-time passcode from your SMS"
-                className="h-8 w-32 font-mono tracking-widest"
+                className="h-9 w-36 font-mono tracking-[0.2em] bg-vault-850/80 border-vault-700/70 text-gold-100 focus-visible:ring-gold-400/50"
                 inputMode="numeric"
                 autoComplete="one-time-code"
               />
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 border-amber-300 text-amber-800 hover:bg-amber-100"
+                className="h-9 border-gold-500/50 text-gold-200 hover:bg-gold-500/15 hover:text-gold-100"
                 disabled={otpInput.length !== 6}
                 onClick={() => onOtpSubmit(otpInput)}
                 aria-label="Verify one-time passcode"
@@ -371,19 +401,19 @@ function MessageBubble({
                 Verify
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
-              <span className="text-[10px] text-amber-700/70 hidden sm:block">expires in 5 min</span>
+              <span className="text-[10px] font-mono text-gold-400/70 hidden sm:block">expires in 5 min</span>
             </CardContent>
           </Card>
         )}
 
         {/* pending intent status */}
         {pending && (
-          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+          <div className="flex items-center gap-2 text-[11px] text-vault-400 font-mono">
             <Lock className="h-3 w-3" />
             <span>
-              intent staged: KES {pending.amountKes.toLocaleString()} → {pending.beneficiary}{" "}
-              {pending.destinationMasked && <span className="font-mono">({pending.destinationMasked})</span>} · state:{" "}
-              <b className="text-slate-700">{pending.state.replace(/_/g, " ")}</b>
+              intent staged: <span className="text-gold-300">KES {pending.amountKes.toLocaleString()}</span> → {pending.beneficiary}{" "}
+              {pending.destinationMasked && <span>({pending.destinationMasked})</span>} · state:{" "}
+              <b className="text-jade-300">{pending.state.replace(/_/g, " ")}</b>
             </span>
           </div>
         )}
@@ -391,37 +421,37 @@ function MessageBubble({
         {/* guard notices */}
         <div className="flex flex-wrap gap-1.5">
           {blocked && (
-            <Badge variant="outline" className="border-red-300 bg-red-50 text-red-700 text-[10px] gap-1">
+            <Badge variant="outline" className="border-red-800/70 bg-red-950/50 text-red-300 text-[10px] gap-1">
               <ShieldAlert className="h-3 w-3" /> refused: instruction attack (score {t?.guard?.injectionScore?.toFixed(2)})
             </Badge>
           )}
           {pii.length > 0 && (
-            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-[10px] gap-1">
+            <Badge variant="outline" className="border-gold-700/60 bg-gold-950/40 text-gold-300 text-[10px] gap-1">
               <ShieldCheck className="h-3 w-3" /> PII detected & tokenised: {pii.join(", ")}
             </Badge>
           )}
           {t?.route && (
-            <Badge variant="outline" className="border-slate-200 bg-white text-slate-600 text-[10px] gap-1">
+            <Badge variant="outline" className="border-vault-700/70 bg-vault-850/60 text-vault-400 text-[10px] gap-1 font-mono">
               route: {t.route}
             </Badge>
           )}
           {t?.guard?.outputGuard && (
-            <Badge variant="outline" className={`text-[10px] gap-1 ${t.guard.outputGuard.pass ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-red-300 bg-red-50 text-red-700"}`}>
+            <Badge variant="outline" className={`text-[10px] gap-1 font-mono ${t.guard.outputGuard.pass ? "border-jade-700/60 bg-jade-950/40 text-jade-300" : "border-red-800/70 bg-red-950/50 text-red-300"}`}>
               groundedness {t.guard.outputGuard.groundednessScore.toFixed(2)}
             </Badge>
           )}
           {hitl && (
-            <Badge variant="outline" className="border-violet-300 bg-violet-50 text-violet-700 text-[10px] gap-1">
+            <Badge variant="outline" className="border-violet-700/60 bg-violet-950/40 text-violet-300 text-[10px] gap-1">
               <User className="h-3 w-3" /> HITL raised · risk {hitl.riskLevel}
             </Badge>
           )}
           {typeof t?.latencyMs === "number" && (
-            <Badge variant="outline" className="border-slate-200 bg-white text-slate-500 text-[10px]">
+            <Badge variant="outline" className="border-vault-700/70 bg-vault-850/60 text-vault-500 text-[10px] font-mono">
               {t.latencyMs}ms · {(t.modelCalls ?? []).map((c) => c.backend).join(",") || "deterministic"}
             </Badge>
           )}
           {t?.auditChainTip && (
-            <Badge variant="outline" className="border-slate-200 bg-white text-slate-400 text-[10px] font-mono">
+            <Badge variant="outline" className="border-vault-700/70 bg-vault-850/60 text-vault-500 text-[10px] font-mono">
               audit #{t.auditChainTip.slice(0, 10)}
             </Badge>
           )}
@@ -429,13 +459,13 @@ function MessageBubble({
 
         {/* tool calls */}
         {tools.length > 0 && (
-          <div className="rounded-lg border border-slate-200 bg-white p-2 space-y-1.5">
+          <div className="rounded-lg border border-vault-700/50 bg-vault-850/50 p-2.5 space-y-1.5">
             {tools.map((tc, i) => (
               <div key={i} className="flex items-start gap-2 text-[11px]">
-                <Wrench className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                <Wrench className="h-3.5 w-3.5 text-gold-500/80 mt-0.5 shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-mono font-medium text-slate-700">{tc.name}</span>
-                  <span className="font-mono text-slate-500 break-all"> {JSON.stringify(tc.args)}</span>
+                  <span className="font-mono font-medium text-jade-300">{tc.name}</span>
+                  <span className="font-mono text-vault-400 break-all"> {JSON.stringify(tc.args)}</span>
                 </div>
               </div>
             ))}
@@ -446,7 +476,7 @@ function MessageBubble({
             the guided tour's step 2) */}
         {citations.length > 0 && <CitationList citations={citations} />}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -491,51 +521,53 @@ function AccountOverview({ session, refreshKey }: { session: SessionInfo; refres
 
   if (!data || data.accounts.length === 0) return null;
   return (
-    <Card className="rounded-xl border-slate-200 bg-white shadow-sm h-fit" data-testid="account-overview">
+    <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl shadow-[0_16px_50px_-24px_oklch(0.08_0.01_170/0.9)] h-fit" data-testid="account-overview">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Landmark className="h-4 w-4 text-emerald-700" />
-            <span className="text-sm font-medium text-slate-800">My accounts</span>
+            <Landmark className="h-4 w-4 text-gold-400" />
+            <span className="font-display text-sm font-medium text-vault-50">My accounts</span>
           </div>
-          <button onClick={() => void load()} className="text-[10px] text-slate-400 hover:text-emerald-700" aria-label="Refresh balances">
+          <button onClick={() => void load()} className="text-[10px] font-mono uppercase tracking-wider text-vault-500 hover:text-gold-300 transition-colors" aria-label="Refresh balances">
             refresh
           </button>
         </div>
         {data.accounts.map((a) => (
-          <div key={a.handle} className="flex items-center justify-between rounded-lg border border-slate-100 px-2.5 py-2">
-            <div>
-              <div className="text-[11px] font-mono text-slate-700">
-                {a.handle} <span className="text-slate-400">{a.maskedNumber}</span>
+          <div key={a.handle} className="rounded-xl border border-vault-700/60 bg-gradient-to-br from-vault-850/90 to-vault-900 px-3 py-2.5 hover:border-gold-500/30 transition-colors">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[11px] font-mono text-jade-300 truncate">
+                  {a.handle} <span className="text-vault-400">{a.maskedNumber}</span>
+                </div>
+                <div className="text-[10px] text-vault-400 mt-0.5">
+                  {a.type} · {a.currency}
+                  {a.lastActivityAt ? ` · last activity ${new Date(a.lastActivityAt).toLocaleDateString()}` : ""}
+                </div>
               </div>
-              <div className="text-[10px] text-slate-400">
-                {a.type} · {a.currency}
-                {a.lastActivityAt ? ` · last activity ${new Date(a.lastActivityAt).toLocaleDateString()}` : ""}
+              <div className="font-mono text-sm font-semibold text-gold-200 shrink-0 tabular-nums">
+                KES {a.balanceKes.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
-            </div>
-            <div className="font-mono text-sm font-semibold text-slate-900">
-              KES {a.balanceKes.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
           </div>
         ))}
         {data.beneficiaries.length > 0 && (
-          <div className="space-y-1.5 pt-1 border-t border-slate-100">
-            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">beneficiaries</div>
+          <div className="space-y-1.5 pt-2 border-t border-vault-700/50">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-vault-500">beneficiaries</div>
             {data.beneficiaries.map((b) => (
-              <div key={b.name} className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-600 truncate">{b.name}</span>
-                <span className="flex items-center gap-1 shrink-0">
-                  <span className="font-mono text-slate-400">{b.masked}</span>
+              <div key={b.name} className="flex items-center justify-between text-[11px] gap-2">
+                <span className="text-vault-300 truncate">{b.name}</span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="font-mono text-vault-400">{b.masked}</span>
                   <Badge
                     variant="outline"
-                    className={`text-[9px] px-1 py-0 ${b.established ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                    className={`text-[9px] px-1.5 py-0 font-mono uppercase tracking-wide ${b.established ? "border-jade-700/60 bg-jade-950/40 text-jade-300" : "border-gold-700/60 bg-gold-950/40 text-gold-300"}`}
                   >
                     {b.established ? b.destinationType : `new · ${b.destinationType}`}
                   </Badge>
                 </span>
               </div>
             ))}
-            <p className="text-[9px] text-slate-400 leading-relaxed">
+            <p className="text-[9px] text-vault-500 leading-relaxed">
               NEW beneficiaries trigger a 30-minute cooling-off before the first send (fraud control).
             </p>
           </div>
@@ -552,12 +584,12 @@ function AccountOverview({ session, refreshKey }: { session: SessionInfo; refres
 function CitationList({ citations }: { citations: Citation[] }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2 space-y-1.5">
-      <div className="text-[10px] font-medium text-emerald-800 flex items-center gap-1 uppercase tracking-wide">
+    <div className="rounded-xl border border-jade-800/50 bg-jade-950/25 p-2.5 space-y-1.5">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-jade-300 flex items-center gap-1.5">
         <BookOpen className="h-3 w-3" /> sources — click to inspect
       </div>
       {citations.map((c, i) => (
-        <div key={i} className="text-[11px] text-slate-600">
+        <div key={i} className="text-[11px] text-vault-300">
           <button
             onClick={() => {
               setOpen(open === i ? null : i);
@@ -566,21 +598,21 @@ function CitationList({ citations }: { citations: Citation[] }) {
             }}
             data-testid={`citation-${i}`}
             aria-expanded={open === i}
-            className="flex gap-1.5 text-left w-full rounded p-0.5 hover:bg-emerald-100/60 transition"
+            className="flex gap-1.5 text-left w-full rounded p-0.5 hover:bg-jade-900/30 transition-colors"
           >
-            <FileText className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+            <FileText className="h-3.5 w-3.5 text-jade-400 mt-0.5 shrink-0" />
             <span>
-              <span className="font-mono text-emerald-800">
+              <span className="font-mono text-jade-300">
                 [{c.docId} p.{c.page}]
               </span>{" "}
               {c.title}
-              {c.effectiveDate && <span className="text-slate-400"> · effective {c.effectiveDate}</span>}
-              {open !== i && <span className="text-emerald-600"> · ▾</span>}
+              {c.effectiveDate && <span className="text-vault-500"> · effective {c.effectiveDate}</span>}
+              {open !== i && <span className="text-jade-400"> · ▾</span>}
             </span>
           </button>
           {open === i && (
-            <div className="mt-1 ml-5 rounded border border-emerald-200 bg-white p-2 text-[10px] leading-relaxed text-slate-600">
-              <span className="font-mono text-[9px] text-emerald-700 block mb-0.5">{c.breadcrumb}</span>
+            <div className="mt-1 ml-5 rounded-lg border border-vault-700/60 bg-vault-850/80 p-2 text-[10px] leading-relaxed text-vault-300">
+              <span className="font-mono text-[9px] text-gold-400/90 block mb-0.5">{c.breadcrumb}</span>
               {c.snippet ?? "No excerpt stored for this citation."}
             </div>
           )}
@@ -598,47 +630,47 @@ function TracePanel({ session, last }: { session: SessionInfo; last?: Msg }) {
   const t = last?.trace;
   const events = t?.traceEvents ?? [];
   return (
-    <Card className="rounded-xl border-slate-200 bg-white shadow-sm h-fit lg:sticky lg:top-20">
+    <Card className="rounded-2xl border-vault-700/60 bg-vault-900/70 backdrop-blur-xl shadow-[0_16px_50px_-24px_oklch(0.08_0.01_170/0.9)] h-fit lg:sticky lg:top-20">
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-emerald-700" />
-          <span className="text-sm font-medium text-slate-800">Why this answer</span>
+          <Activity className="h-4 w-4 text-jade-400" />
+          <span className="font-display text-sm font-medium text-vault-50">Why this answer</span>
         </div>
 
         {/* Layer 1 — plain-language reason (deep-review P2-16): what a
             customer needs BEFORE the developer trace */}
-        <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
-          <div className="text-[10px] font-medium text-emerald-800 uppercase tracking-wide mb-1">in plain language</div>
-          <p className="text-[12px] text-slate-700 leading-relaxed">{plainReason(last)}</p>
+        <div className="rounded-xl bg-gold-500/8 border border-gold-500/25 p-3">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-gold-400 mb-1.5">in plain language</div>
+          <p className="text-[12px] text-vault-200 leading-relaxed">{plainReason(last)}</p>
         </div>
 
-        <p className="text-[11px] text-slate-500 leading-relaxed">
+        <p className="text-[11px] text-vault-400 leading-relaxed">
           The technical trace below shows the node-by-node decision path for your last message — the
           same events that land on the hash-chained audit log.
         </p>
 
         {/* session context */}
-        <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 space-y-2 text-[11px]">
-          <div className="font-medium text-slate-700">Server-side session</div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">identity</span>
-            <span className="font-mono">{session.customer.name}</span>
+        <div className="rounded-xl bg-vault-850/60 border border-vault-700/50 p-3 space-y-2 text-[11px]">
+          <div className="font-mono uppercase tracking-wider text-[10px] text-vault-500">server-side session</div>
+          <div className="flex justify-between gap-2">
+            <span className="text-vault-400">identity</span>
+            <span className="font-mono text-vault-200">{session.customer.name}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">scopes</span>
-            <span className="font-mono text-[10px]">accounts:read · fees:read · transfers:propose</span>
+          <div className="flex justify-between gap-2">
+            <span className="text-vault-400">scopes</span>
+            <span className="font-mono text-[10px] text-jade-300">accounts:read · fees:read · transfers:propose</span>
           </div>
           {session.accounts.map((a) => (
-            <div key={a.handle} className="flex justify-between">
-              <span className="text-slate-500">{a.type}</span>
-              <span className="font-mono">{a.handle} → {a.maskedNumber}</span>
+            <div key={a.handle} className="flex justify-between gap-2">
+              <span className="text-vault-400">{a.type}</span>
+              <span className="font-mono text-vault-300">{a.handle} → {a.maskedNumber}</span>
             </div>
           ))}
           {session.beneficiaries.map((b) => (
-            <div key={b.name} className="flex justify-between">
-              <span className="text-slate-500">beneficiary</span>
-              <span className="font-mono">
-                {b.name} {b.masked} {b.established ? "✓ established" : "○ new (cooling-off)"}
+            <div key={b.name} className="flex justify-between gap-2">
+              <span className="text-vault-400">beneficiary</span>
+              <span className="font-mono text-vault-300">
+                {b.name} {b.masked} {b.established ? <span className="text-jade-400">✓ established</span> : <span className="text-gold-400">○ new (cooling-off)</span>}
               </span>
             </div>
           ))}
@@ -649,35 +681,35 @@ function TracePanel({ session, last }: { session: SessionInfo; last?: Msg }) {
           <div className="space-y-1.5">
             {events.map((e, i) => (
               <div key={i} className="flex gap-2 text-[11px]">
-                <span className="font-mono text-slate-400 w-10 shrink-0 text-right">{e.at}ms</span>
+                <span className="font-mono text-vault-600 w-10 shrink-0 text-right tabular-nums">{e.at}ms</span>
                 <span className={`font-mono px-1.5 rounded ${nodeColor(e.node)} shrink-0`}>{e.node}</span>
-                <span className="text-slate-600 truncate min-w-0" title={JSON.stringify(e.detail)}>
+                <span className="text-vault-400 truncate min-w-0" title={JSON.stringify(e.detail)}>
                   {summariseDetail(e.node, e.detail)}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-[11px] text-slate-400 italic">Send a message to populate the trace.</div>
+          <div className="text-[11px] text-vault-500 italic">Send a message to populate the trace.</div>
         )}
 
         {t?.modelCalls && t.modelCalls.length > 0 && (
-          <div className="rounded-lg border border-slate-100 p-2 text-[11px] space-y-1">
-            <div className="font-medium text-slate-600">Model gateway calls</div>
+          <div className="rounded-xl border border-vault-700/50 bg-vault-850/50 p-2.5 text-[11px] space-y-1">
+            <div className="font-mono uppercase tracking-wider text-[10px] text-vault-500">model gateway calls</div>
             {t.modelCalls.map((c, i) => (
-              <div key={i} className="flex justify-between font-mono text-slate-500">
+              <div key={i} className="flex justify-between font-mono text-vault-400">
                 <span>{c.tag} → {c.model}</span>
-                <span>{c.latencyMs}ms{c.costUsd ? ` · $${c.costUsd.toFixed(4)}` : ""}</span>
+                <span className="tabular-nums">{c.latencyMs}ms{c.costUsd ? ` · $${c.costUsd.toFixed(4)}` : ""}</span>
               </div>
             ))}
-            <p className="text-slate-400 text-[10px]">
+            <p className="text-vault-500 text-[10px]">
               PII is pseudonymised before external calls; failures fall back deterministically.
             </p>
           </div>
         )}
 
-        <div className="flex items-start gap-1.5 text-[10px] text-slate-400">
-          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-1.5 text-[10px] text-vault-500">
+          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5 text-gold-500/70" />
           <span>
             Fee figures come from the tariff tool, never the model. Transfers need OTP + officer
             approval before execution.
@@ -689,11 +721,11 @@ function TracePanel({ session, last }: { session: SessionInfo; last?: Msg }) {
 }
 
 function nodeColor(node: string): string {
-  if (node.includes("guard")) return "bg-amber-50 text-amber-700 border border-amber-200";
-  if (node === "hitl") return "bg-violet-50 text-violet-700 border border-violet-200";
-  if (node === "policy_check") return "bg-red-50 text-red-700 border border-red-200";
-  if (node === "rag") return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  return "bg-slate-50 text-slate-600 border border-slate-200";
+  if (node.includes("guard")) return "bg-gold-950/50 text-gold-300 border border-gold-700/50";
+  if (node === "hitl") return "bg-violet-950/50 text-violet-300 border border-violet-700/50";
+  if (node === "policy_check") return "bg-red-950/50 text-red-300 border border-red-800/50";
+  if (node === "rag") return "bg-jade-950/50 text-jade-300 border border-jade-800/50";
+  return "bg-vault-850/70 text-vault-400 border border-vault-700/50";
 }
 
 function summariseDetail(node: string, d: Record<string, unknown>): string {
@@ -794,21 +826,21 @@ function journeyFromResult(r?: ChatResult): { stage: JourneyStage; label: string
 function ControlJourney({ stage, label }: { stage: JourneyStage; label: string }) {
   const activeIndex = JOURNEY_STAGES.findIndex((s) => s.key === stage);
   return (
-    <div className="px-3 sm:px-4 py-2 border-b border-slate-100" aria-label="Control journey">
+    <div className="px-3 sm:px-5 py-2.5 border-b border-vault-700/50 bg-vault-850/40" aria-label="Control journey">
       <div className="flex items-center gap-1 overflow-x-auto" role="list">
         {JOURNEY_STAGES.map((s, i) => {
           const done = i < activeIndex;
           const active = i === activeIndex;
           return (
             <div key={s.key} role="listitem" className="flex items-center gap-1 shrink-0">
-              {i > 0 && <ChevronRight className={`h-3 w-3 ${done ? "text-emerald-500" : "text-slate-300"}`} aria-hidden />}
+              {i > 0 && <ChevronRight className={`h-3 w-3 ${done ? "text-jade-600" : "text-vault-700"}`} aria-hidden />}
               <span
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors ${
                   active
-                    ? "bg-emerald-700 text-white border-emerald-700"
+                    ? "bg-gold-500/90 text-vault-975 border-gold-500 font-semibold"
                     : done
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-slate-50 text-slate-400 border-slate-200"
+                      ? "bg-jade-950/50 text-jade-300 border-jade-800/60"
+                      : "bg-vault-850/60 text-vault-500 border-vault-700/60"
                 }`}
               >
                 {s.label}
@@ -817,7 +849,7 @@ function ControlJourney({ stage, label }: { stage: JourneyStage; label: string }
           );
         })}
       </div>
-      <div className="text-[10px] text-slate-500 mt-1">{label}</div>
+      <div className="text-[10px] text-vault-400 mt-1">{label}</div>
     </div>
   );
 }

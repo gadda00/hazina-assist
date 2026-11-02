@@ -34,31 +34,43 @@ export function TourBanner({ tick }: { tick?: number }) {
 
   return (
     <div
-      className={`rounded-xl border p-3 sm:p-4 mb-3 ${complete ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}
+      className={`rounded-2xl border p-3.5 sm:p-4 mb-3.5 backdrop-blur-xl shadow-[0_18px_50px_-24px_oklch(0.08_0.01_170/0.9)] ${
+        complete
+          ? "border-jade-700/60 bg-jade-950/30"
+          : "hairline-gold border-gold-500/40 bg-vault-900/80"
+      }`}
       data-testid="tour-banner"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5 min-w-0">
-          {complete ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0 mt-0.5" />
-          ) : (
-            <Map className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
-          )}
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-sm font-semibold ${complete ? "text-emerald-900" : "text-amber-900"}`}>{def.title}</span>
+        <div className="flex items-start gap-3 min-w-0">
+          <span
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
+              complete
+                ? "border-jade-700/60 bg-jade-900/40"
+                : "border-gold-500/45 bg-gold-500/12"
+            }`}
+          >
+            {complete ? (
+              <CheckCircle2 className="h-4 w-4 text-jade-300" />
+            ) : (
+              <Map className="h-4 w-4 text-gold-400" />
+            )}
+          </span>
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className={`font-display text-sm font-semibold ${complete ? "text-jade-100" : "text-vault-50"}`}>{def.title}</span>
               {!complete && (
-                <span className="text-[10px] font-mono text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">
+                <span className="text-[10px] font-mono text-gold-300 bg-gold-500/12 border border-gold-500/35 rounded-full px-2 py-0.5 tabular-nums">
                   step {progress}
                 </span>
               )}
             </div>
-            <p className={`text-xs ${complete ? "text-emerald-900/90" : "text-amber-900/90"}`}>{def.hint}</p>
-            <p className="text-[11px] text-emerald-800">
-              <b>Shows:</b> {def.shows}
+            <p className={`text-xs leading-relaxed ${complete ? "text-jade-100/90" : "text-vault-200/90"}`}>{def.hint}</p>
+            <p className="text-[11px] text-vault-300">
+              <b className="text-jade-300 font-medium">Shows:</b> {def.shows}
             </p>
-            <p className="text-[11px] text-slate-600">
-              <b>Does not prove:</b> {def.doesNotProve}
+            <p className="text-[11px] text-vault-400">
+              <b className="text-gold-300/90 font-medium">Does not prove:</b> {def.doesNotProve}
             </p>
 
             {/* step dots — clickable (manual jump), current step highlighted */}
@@ -74,10 +86,10 @@ export function TourBanner({ tick }: { tick?: number }) {
                     aria-label={`Go to step ${s.id}: ${s.title}`}
                     className={`h-2 rounded-full transition-all ${
                       s.id === step
-                        ? "w-5 bg-amber-600"
+                        ? "w-6 bg-gold-400"
                         : s.id < step
-                          ? "w-2 bg-amber-400 hover:bg-amber-500"
-                          : "w-2 bg-amber-200 hover:bg-amber-300"
+                          ? "w-2 bg-jade-500 hover:bg-jade-400"
+                          : "w-2 bg-vault-700 hover:bg-gold-600"
                     }`}
                   />
                 ))}
@@ -90,14 +102,14 @@ export function TourBanner({ tick }: { tick?: number }) {
             endTour();
           }}
           aria-label="Exit guided tour"
-          className={`shrink-0 p-1 ${complete ? "text-emerald-700 hover:text-emerald-900" : "text-amber-700 hover:text-amber-900"}`}
+          className={`shrink-0 p-1.5 rounded-lg transition-colors ${complete ? "text-jade-300 hover:text-jade-100 hover:bg-jade-900/40" : "text-vault-400 hover:text-gold-200 hover:bg-vault-800"}`}
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {/* manual navigation — the guarantee that you can NEVER get stuck */}
-      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-amber-200/70 flex-wrap">
+      <div className={`flex items-center gap-2 mt-3 pt-3 border-t flex-wrap ${complete ? "border-jade-800/50" : "border-vault-700/60"}`}>
         {complete ? (
           <>
             <button
@@ -105,7 +117,7 @@ export function TourBanner({ tick }: { tick?: number }) {
                 restartTour();
               }}
               data-testid="tour-restart"
-              className="flex items-center gap-1 text-xs font-medium text-emerald-800 border border-emerald-300 bg-white hover:bg-emerald-100 rounded-full px-3 py-1"
+              className="flex items-center gap-1.5 text-xs font-medium text-jade-200 border border-jade-700/60 bg-jade-950/40 hover:bg-jade-900/50 rounded-full px-3.5 py-1.5 transition-colors"
             >
               <RotateCcw className="h-3.5 w-3.5" /> Restart tour
             </button>
@@ -113,7 +125,7 @@ export function TourBanner({ tick }: { tick?: number }) {
               onClick={() => {
                 endTour();
               }}
-              className="flex items-center gap-1 text-xs font-medium text-slate-600 border border-slate-300 bg-white hover:bg-slate-100 rounded-full px-3 py-1"
+              className="flex items-center gap-1.5 text-xs font-medium text-vault-300 border border-vault-600/70 bg-vault-850/60 hover:bg-vault-800 rounded-full px-3.5 py-1.5 transition-colors"
             >
               Dismiss
             </button>
@@ -127,7 +139,7 @@ export function TourBanner({ tick }: { tick?: number }) {
               disabled={step <= 1}
               data-testid="tour-back"
               aria-label="Previous tour step"
-              className="flex items-center gap-1 text-xs font-medium text-amber-900 border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-full px-3 py-1"
+              className="flex items-center gap-1 text-xs font-medium text-vault-200 border border-vault-600/70 bg-vault-850/60 hover:bg-vault-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-full px-3.5 py-1.5 transition-colors"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Back
             </button>
@@ -137,11 +149,11 @@ export function TourBanner({ tick }: { tick?: number }) {
               }}
               data-testid="tour-next"
               aria-label="Next tour step"
-              className="flex items-center gap-1 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-full px-3 py-1"
+              className="flex items-center gap-1 text-xs font-medium text-vault-975 bg-gradient-to-br from-gold-400 to-gold-600 hover:from-gold-300 hover:to-gold-500 rounded-full px-3.5 py-1.5 transition-all shadow-[0_4px_16px_-4px_oklch(0.68_0.13_80/0.6)]"
             >
               {step === TOUR_STEPS.length ? "Finish" : "Next"} <ChevronRight className="h-3.5 w-3.5" />
             </button>
-            <span className="text-[10px] text-amber-700/70 ml-auto hidden sm:block">
+            <span className="text-[10px] font-mono text-vault-500 ml-auto hidden sm:block">
               auto-advances on real results · manual nav always available
             </span>
           </>

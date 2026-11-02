@@ -1,8 +1,8 @@
 {
   "command": "bun run verify",
   "overall": "PASS",
-  "commit": "37483b4e1d6260b1f08830d3c52f4d7d3fd8647e",
-  "generatedAt": "2026-11-01T07:08:38.561Z",
+  "commit": "272b4b1f0b92c3f1678ad6c0bd31bf599f075bca",
+  "generatedAt": "2026-11-02T04:08:37.530Z",
   "deploymentMode": "demo",
   "toolchain": {
     "bun": "1.3.14",
@@ -49,7 +49,7 @@
     "routeAccuracyPercent": "100.0",
     "refusalPrecisionRecall": "1/1",
     "feeNumericMatchPercent": "100.0",
-    "latency": "9ms / 2069ms",
+    "latency": "9ms / 1981ms",
     "gate": "PASS"
   },
   "build": {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh docs/screenshots/* after the logo/branding change.
+"""Refresh docs/screenshots/* after the "The Vault" redesign.
 
 Captures the README-referenced shots against the running dev server:
 login, chat (fee answer), officer console tabs, and the tour banner.
@@ -26,7 +26,7 @@ def main():
 
         # 1. login screen (logo hero + directory)
         page.goto(BASE, wait_until="networkidle")
-        wait_text(page, "Sign in to the demo (OIDC stub)")
+        wait_text(page, "Sign in to the vault")
         time.sleep(0.8)
         shot(page, "login.png")
 
@@ -47,9 +47,9 @@ def main():
 
         # 3. officer console tabs
         page.click("button:has-text('Sign out')")
-        page.wait_for_selector("text=Sign in to the demo (OIDC stub)", timeout=15000)
+        wait_text(page, "Sign in to the vault")
         time.sleep(0.8)
-        page.click("button:has-text('Officer Njeri (Credit)')")
+        page.click("button:has-text('Officer Njeri')")
         page.wait_for_selector("text=awaiting a human decision", timeout=20000)
         time.sleep(1.2)
         shot(page, "console-approvals.png")

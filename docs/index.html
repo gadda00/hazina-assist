@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23064e3b'/%3E%3Cpath d='M32 9 L45 14 V29 C45 38.5 39 44.8 32 48.5 C25 44.8 19 38.5 19 29 V14 Z' fill='%2310b981' stroke='%23fbbf24' stroke-width='2.5'/%3E%3Cpath d='M25 27 L28.5 21.5 H35.5 L39 27 L32 37.5 Z' fill='%23fbbf24'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b4d38'/%3E%3Cpath d='M32 9 L45 14 V29 C45 38.5 39 44.8 32 48.5 C25 44.8 19 38.5 19 29 V14 Z' fill='%231d9a6b' stroke='%23e8c468' stroke-width='2.5'/%3E%3Cpath d='M25 27 L28.5 21.5 H35.5 L39 27 L32 37.5 Z' fill='%23e8c468'/%3E%3C/svg%3E">
 <title>Hazina Assist — Bank-Grade AI Assistant</title>
 <meta name="description" content="A bank-grade AI assistant for a Kenyan bank: policy Q&A with citations, account tools, signed transfer intents with human approval, and a hash-chained audit log.">
 <style>
   :root{
     --bg:#0a0f0d; --panel:#101815; --panel2:#0d1512; --line:#1e2b26;
-    --em:#10b981; --em2:#34d399; --emdim:#064e3b;
+    --em:#1d9a6b; --em2:#43bd8c; --emdim:#0b4d38;
     --t1:#e8f0ec; --t2:#9fb4ab; --t3:#6b8077;
-    --red:#f87171; --amber:#fbbf24; --violet:#a78bfa;
+    --red:#f87171; --amber:#e8c468; --violet:#a78bfa;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -32,12 +32,12 @@
   .ghbtn:hover{border-color:var(--em);text-decoration:none;color:var(--em2)}
   /* hero */
   .hero{padding:88px 0 64px;position:relative;text-align:center}
-  .hero:before{content:"";position:absolute;inset:-40% 20% auto;height:420px;background:radial-gradient(closest-side,rgba(16,185,129,.14),transparent);filter:blur(40px);pointer-events:none}
-  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--emdim);background:rgba(16,185,129,.07);color:var(--em2);font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;letter-spacing:.4px}
+  .hero:before{content:"";position:absolute;inset:-40% 20% auto;height:420px;background:radial-gradient(closest-side,rgba(29,154,107,.16),transparent);filter:blur(40px);pointer-events:none}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--emdim);background:rgba(29,154,107,.08);color:var(--em2);font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;letter-spacing:.4px}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--em);animation:blink 2.4s infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
   h1{color:var(--t1);font-size:clamp(34px,5.4vw,56px);line-height:1.12;font-weight:800;letter-spacing:-.02em;margin:22px 0 16px}
-  h1 .grad{background:linear-gradient(90deg,var(--em2),#2dd4bf);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h1 .grad{background:linear-gradient(90deg,var(--em2),#e8c468);-webkit-background-clip:text;background-clip:text;color:transparent}
   .sub{max-width:720px;margin:0 auto;font-size:17px;color:var(--t2)}
   .sub b{color:var(--t1)}
   .ctas{display:flex;gap:14px;justify-content:center;margin-top:30px;flex-wrap:wrap}
@@ -66,14 +66,14 @@
   .cap img{width:100%;aspect-ratio:1280/577;object-fit:cover;object-position:top;border-bottom:1px solid var(--line)}
   .cap .body{padding:20px}
   .cap h3{color:var(--t1);font-size:16px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
-  .num{font-family:var(--mono);font-size:11px;color:var(--em);border:1px solid var(--emdim);border-radius:5px;padding:2px 7px;background:rgba(16,185,129,.06)}
+  .num{font-family:var(--mono);font-size:11px;color:var(--em);border:1px solid var(--emdim);border-radius:5px;padding:2px 7px;background:rgba(29,154,107,.07)}
   .cap p{font-size:13.5px}
   .cap .tech{margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--t3);line-height:1.9}
   .cap .tech em{color:var(--em2);font-style:normal}
   /* pipeline */
   .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:26px 0 10px}
   .node{font-family:var(--mono);font-size:12px;font-weight:600;padding:8px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--t1);white-space:nowrap}
-  .node.g{border-color:var(--emdim);color:var(--em2);background:rgba(16,185,129,.07)}
+  .node.g{border-color:var(--emdim);color:var(--em2);background:rgba(29,154,107,.08)}
   .node.h{border-color:#7c3aed55;color:var(--violet);background:rgba(167,139,250,.07)}
   .arrow{color:var(--t3);font-family:var(--mono);font-size:12px}
   .subnodes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
@@ -125,7 +125,7 @@
 
 <header>
   <div class="wrap nav">
-    <div class="brand"><svg class="mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="Hazina Assist"><defs><linearGradient id="hs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="0.5" stop-color="#10b981"/><stop offset="1" stop-color="#065f46"/></linearGradient><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="0.5" stop-color="#fbbf24"/><stop offset="1" stop-color="#d97706"/></linearGradient></defs><path d="M32 5 L48 11.5 V29 C48 40 41 47.4 32 52 C23 47.4 16 40 16 29 V11.5 Z" fill="url(#hs)" stroke="#fbbf24" stroke-width="2.5" stroke-linejoin="round"/><path d="M24.5 26 L28.5 19.5 H35.5 L39.5 26 L32 38.5 Z" fill="url(#hg)" stroke="#92400e" stroke-width="1" stroke-linejoin="round"/><path d="M24.5 26 H39.5 M28.5 19.5 L32 38.5 L35.5 19.5" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="1.2" stroke-linejoin="round"/></svg>HAZINA&nbsp;ASSIST</div>
+    <div class="brand"><svg class="mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="Hazina Assist"><defs><linearGradient id="hs" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#43bd8c"/><stop offset="0.45" stop-color="#1d9a6b"/><stop offset="1" stop-color="#0b4d38"/></linearGradient><linearGradient id="hg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#f6e3ac"/><stop offset="0.5" stop-color="#e8c468"/><stop offset="1" stop-color="#b07f2e"/></linearGradient></defs><path d="M32 5 L48 11.5 V29 C48 40 41 47.4 32 52 C23 47.4 16 40 16 29 V11.5 Z" fill="url(#hs)" stroke="#e8c468" stroke-width="1.8" stroke-linejoin="round"/><path d="M24.5 26 L28.5 19.5 H35.5 L39.5 26 L32 38.5 Z" fill="url(#hg)" stroke="#7a5a1e" stroke-width="0.9" stroke-linejoin="round"/><path d="M24.5 26 H39.5 M28.5 19.5 L32 38.5 L35.5 19.5" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="1.1" stroke-linejoin="round"/></svg>HAZINA&nbsp;ASSIST</div>
     <nav class="navlinks">
       <a href="#capabilities">Capabilities</a>
       <a href="#architecture">Architecture</a>
