@@ -289,3 +289,34 @@ redesign on the same logic/API surface — zero behavioural changes, every selec
   100% 55/55, type-validated build) · browser smoke 18/18 (login→fee→OTP→approve→audit,
   RBAC, mobile 390px, zero console errors) · VLM design QA: desktop login 9/10, mobile 8/10
   after fixes.
+
+## 2026-11-11 — ship: hardening + Vault redesign pushed to GitHub; CI fully green
+
+- **Shipped `37483b4..e0e66e4`** (3 commits: verification-grade hardening 31e2c38, its
+  worklog 272b4b1, The Vault redesign e0e66e4) to `github.com/gadda00/hazina-assist`
+  via `scripts/push-to-github.sh` (idempotent: repo exists 422 tolerated, Pages
+  re-enabled, topics set). Local `origin/main` ref re-synced post-push (0/0 divergence).
+- **Pre-push hygiene**: working-tree noise restored (`next-env.d.ts` dev-flip);
+  secret-pattern scan of the 3 unpushed commit diffs came back clean. The `firstlight/`
+  checkout is absent from this sandbox — that repo was already fully shipped + green
+  on 2026-11-01 (see prior section), nothing pending there.
+- **First CI run on e0e66e4: 10/11 green, gitleaks (blocking) FAILED** — generic-api-key
+  rule flagged `scripts/verify.ts:71` (`const INTENT_SECRET = "verify-secret-…"`,
+  added in 31e2c38). Confirmed **false positive**: deterministic TEST-ONLY HMAC key
+  for the isolated verify run; production reads `HAZINA_INTENT_SECRET` from env and
+  fails closed in operational mode (`src/lib/transfer.ts`, `src/lib/deployment.ts`).
+- **Fix (f2d0224)**: inline `// gitleaks:allow` annotation on that line (with a comment
+  block explaining the boundary) + `.gitleaksignore` fingerprint for the already-pushed
+  commit so full-history scans also pass. Validated locally with the exact CI version
+  (gitleaks 8.24.3): the failing CI-range scan now reports **0 findings**, and a
+  full-history scan over all 24 commits reports **0 findings**. lint ✓ · typecheck ✓.
+- **CI on f2d0224 (run 15): ALL 12 JOBS GREEN** — gitleaks, semgrep+bandit,
+  pip/bun audit, trivy+SBOM, helm lint, vercel.json preflight, DS contract tests,
+  unit+contract, eval gate, `bun run verify` (clean checkout), production build.
+- **Pages showcase rebuilt from main /docs and live** at
+  https://gadda00.github.io/hazina-assist/ (HTTP 200, Last-Modified 2026-11-11 05:41Z,
+  redesigned screenshots serving — login 1.6 MB, chat, ops-console).
+- **Token hygiene**: PAT verified via API (login `gadda00`, scopes incl. repo + workflow,
+  admin on the repo); used ONLY via process env / HTTP `http.extraheader` auth — never
+  written to `.git/config`, remotes, or any file. User advised to revoke it (broad
+  scopes; it transited chat).
