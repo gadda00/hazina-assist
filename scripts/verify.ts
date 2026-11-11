@@ -68,7 +68,11 @@ function provisionTmpDb(): string {
   return url;
 }
 
-const INTENT_SECRET = "verify-secret-0123456789abcdef";
+// Deterministic TEST-ONLY HMAC key: signs intents during the isolated verify run
+// against a throwaway SQLite DB. Production never uses it — `HAZINA_INTENT_SECRET`
+// must come from the environment (>=32 chars, fail-closed in operational mode —
+// see src/lib/transfer.ts). Allowlisted for gitleaks (generic-api-key FP).
+const INTENT_SECRET = "verify-secret-0123456789abcdef"; // gitleaks:allow
 
 console.log("┌──────────────────────────────────────────────────────────────┐");
 console.log("│ hazina-assist — bun run verify (isolated, deterministic)    │");

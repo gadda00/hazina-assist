@@ -1,0 +1,7 @@
+# gitleaks false positives — reviewed and safe to ignore
+#
+# 31e2c38 scripts/verify.ts:71 (generic-api-key): deterministic TEST-ONLY HMAC
+# key used by `bun run verify` to exercise signed intents against a throwaway
+# SQLite DB. Production reads HAZINA_INTENT_SECRET from the environment and
+# fails closed in operational mode (src/lib/transfer.ts, src/lib/deployment.ts).
+31e2c3859f50de5bdfc9d34e49260fd2eec5eaee:scripts/verify.ts:generic-api-key:71
